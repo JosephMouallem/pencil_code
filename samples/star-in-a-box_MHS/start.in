@@ -1,0 +1,27 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+!  Initialisation parameters
+!
+&init_pars
+  cvsid = '$Id: start.in 10793 2009-05-11 18:55:38Z wdobler $',
+  ip = 14,                      ! debugging parameter
+  xyz0  = -1.5,-1.5,-1.5,       ! first corner of box
+  Lxyz  =  3. , 3. , 3.,        ! box size
+  lperi =  T  , T  , T,         ! periodic direction?
+/
+&eos_init_pars
+/
+&hydro_init_pars
+/
+&density_init_pars
+/
+&grav_init_pars
+/
+&poisson_init_pars
+/
+&entropy_init_pars
+/
+&magnetic_init_pars
+/
+&initial_condition_init_pars
+/

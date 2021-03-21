@@ -1,0 +1,761 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%            -*-LaTeX-*-
+%%%   multigrid.tex   %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Date:   21-Jun-2007
+%% Author: wd (Wolfgang.Dobler@ucalgary.ca)
+%% Description: 
+%%   
+
+%% Choose appropriate driver:
+\RequirePackage{ifpdf}
+\ifpdf
+  \def\mydriver{pdftex}         % writing PDF
+\else
+  \def\mydriver{dvips}          % writing DVI
+\fi
+
+\documentclass[\mydriver,12pt,twoside,notitlepage]{article}
+
+%\usepackage{german,a4}
+%\usepackage[german,british]{babel}
+\usepackage[utf8]{inputenc}
+%\usepackage[T1]{fontenc}\usepackage{lmodern}
+\usepackage[scaled]{helvet}
+\renewcommand{\familydefault}{phv}
+
+\usepackage{amsmath,amssymb,bm,wasysym}
+%\usepackage{latexsym,exscale}
+%\usepackage{newcent,helvet}
+\usepackage{pxfonts}
+%\usepackage{txfonts}
+%\usepackage[it,footnotesize]{caption2}
+%\setlength{\abovecaptionskip}{5pt} % Space before caption
+%\setlength{\belowcaptionskip}{5pt} % Space after caption
+
+%% Load titlesec before hyperref or \section links will be off with dvipdfm
+\usepackage[bf,sf,small,nonindentfirst]{titlesec}
+\newcommand{\sectionbreak}{\clearpage}
+\newcommand{\subsectionbreak}{\clearpage}
+%\titleformat{\subsubsection}{\normalfont\itshape}{\thesubsubsection}{.5em}{}
+%\titlespacing{\subsubsection}{0pt}{*1}{*-1}
+
+\usepackage{units}
+
+\usepackage{booktabs}
+
+\usepackage{graphicx,color}
+\usepackage{multicol}
+\usepackage{parskip}
+\usepackage[paperwidth=20cm,paperheight=15cm,hmargin=20mm,top=15mm,bottom=15mm,twosideshift=5mm]{geometry}
+
+\usepackage{fancyvrb}
+
+\usepackage{makeidx}
+\usepackage[bookmarksopen=true,bookmarksopenlevel=2]{hyperref} % should come late/last
+
+\usepackage{natbib}
+\bibpunct{(}{)}{;}{a}{,}{,}
+\gdef\harvardand{\&}
+%\usepackage[dcucite,abbr,round]{myharvard}
+%% Supposed to be called *after* natbib:
+
+\ifpdf
+  \usepackage{pdfpages}
+\else
+  \newcommand{\includepdf}[2][]{%
+%     \fbox{%
+%       \vfill\\%
+%       \centerline{#2}%
+%       \vfill\\%
+%       }%
+    \centerline{%
+      \fbox{%
+        \parbox[c][0.5\textheight]{0.5\textwidth}{%
+          \vspace*{\stretch{1}}%
+          \hfill Include file \path{#2}\hfill\mbox{}%
+          \vspace*{\stretch{2}}%
+        }%
+      }%
+    }%
+  }%
+  \fi
+
+%% Fancyvrb customizations
+% \DefineShortVerb{\|}
+\newcommand{\BoxLabel}[1]{\fbox{\rmfamily\emph{#1}}}
+%% A customized verbatim environment
+\DefineVerbatimEnvironment%
+  {CodeVerbatim}%
+  {Verbatim}%
+  {frame=single,%
+   framesep=10pt,%
+   xleftmargin=4ex,%
+   xrightmargin=4ex,%   
+   commandchars=\\\{\},%
+   gobble=2%
+  }
+
+
+\frenchspacing
+\sloppy
+
+
+%% Markup
+\definecolor{DarkBlue}{rgb}{0,0,0.7}
+\definecolor{DarkishRed}{rgb}{0.9,0,0}
+\definecolor{DarkishBlue}{rgb}{0,0,0.9}
+\definecolor{DarkishMagenta}{rgb}{0.8,0,0.8}
+\definecolor{math}{rgb}{0,0.55,0}
+\definecolor{gray60}{gray}{0.5}
+\definecolor{green60}{rgb}{0.3,0.5,0.3}
+
+\everymath{\color{math}}        % all math in green
+\newcommand{\Black}{\color{black}}
+\newcommand{\GreyedOut}{\color{gray60}}
+
+\newcommand{\mathcol}[1]{\textcolor{math}{#1}}
+\newcommand{\name}[1]   {\textcolor{name}{#1}}
+
+\newcommand{\ColEmph}[1]{{\color{DarkishRed}#1}}
+\newcommand{\colEmph}[1]{{\color{DarkishBlue}#1}}
+\newcommand{\RedArrow}{\ensuremath{\ColEmph{\rightarrow}}}
+\newcommand{\Code}[1]{{\color{DarkishMagenta}\texttt{#1}}}
+
+%% Matrices and tensors
+\newcommand{\matx}[1]{\mbox{\boldmath${\cal #1}$\unboldmath}}
+\newcommand{\tensor}[1]{\matx{#1}}
+
+%% Math macros
+\newcommand{\Av}      {\mathbf{A}}
+
+\newcommand{\bv}      {\mathbf{b}}
+\newcommand{\Bv}      {\mathbf{B}}
+
+\newcommand{\Courant} {\mathcal{C}}
+\newcommand{\cv}      {\mathbf{c}}
+
+\newcommand{\etav}    {\bm{\eta}}
+\newcommand{\Ev}      {\mathbf{E}}
+
+\newcommand{\fv}      {\mathbf{f}}
+
+\newcommand{\gv}      {\mathbf{g}}
+
+\newcommand{\jv}      {\mathbf{j}}
+
+\newcommand{\kv}      {\mathbf{k}}
+
+\newcommand{\Laplace} { \mathop{\Delta}\nolimits}
+
+\newcommand{\mtildei} {\widetilde{m}_{\rm i}}
+
+\newcommand{\uv}      {\mathbf{u}}
+\newcommand{\uve}     {\uv_{\rm e}}
+\newcommand{\uvi}     {\uv_{\rm i}}
+
+\newcommand{\vv}      {\mathbf{v}}
+\newcommand{\vve}     {\vv_{\rm e}}
+
+\newcommand{\xv}{\mathbf{x}}
+
+\newcommand{\yv}{\mathbf{y}}
+
+% ---------------------------------------------------------------------- %
+
+\title{Long Time Steps for the \textsc{Pencil Code}\\[1.5ex]
+  {\large Implementing and testing Runge--Kutta--Chebyshev schemes\\
+    for highly diffusive problems}
+}
+\author{Wolfgang Dobler}
+
+% ---------------------------------------------------------------------- %
+
+\pagestyle{empty}
+\begin{document}
+
+\maketitle
+
+\clearpage
+\tableofcontents
+\clearpage
+
+%%%%%%%%
+\section{Introduction: Runge--Kutta Schemes}
+%%%%%%%%
+
+%%%
+\subsection{Classical explicit schemes}
+Explicit $s$-stage Runge--Kutta scheme:
+\begin{align}
+  \tau_1 &= t_0 \; ,
+            & \etav_1 &= \yv_0 \; ,
+                         & \kv_1 &= h\fv(\tau_1, \etav_1) \; ,\\
+  \tau_2 &= t_0 + c_2 h \; ,
+            & \etav_2 &= \yv_0 + a_{21} \kv_1 \; ,
+                         & \kv_2 &= h\fv(\tau_2, \etav_2) \; ,\\
+  \tau_3 &= t_0 + c_3 h \; ,
+            & \etav_3 &= \yv_0 + a_{31} \kv_1 + a_{32} \kv_2 \; ,
+                         & \kv_3 &= h\fv(\tau_3, \etav_3) \; ,\\
+  & \vdots &  & \vdots  &  &\vdots \nonumber \\
+  \tau_s &= t_0 + c_s h \; ,
+            & \etav_s &= \yv_0 + a_{s1} \kv_1 + a_{s2} \kv_2
+             + \ldots + a_{s,s-1} \kv_{s-1} \; ,
+                              & \kv_s &= h\fv(\tau_s, \etav_s) \; ,\\
+  t_1 &= t_0 + h \; ,
+            & \yv_1   &= \yv_0 + b_1 \kv_1 + b_2 \kv_2
+                         + \ldots + b_{s-1} \kv_{s-1} + b_{s} \kv_{s} \; .
+\end{align}
+
+
+Butcher tableau:
+\begin{equation}
+  \begin{array}{c|c}
+    \cv & \Av \\
+    \hline
+        & \bv^{\mathsf T}
+  \end{array}
+  \quad=\quad
+  \begin{array}{c|ccccc}
+    0                                                 \\
+    c_2    & a_{21}                                   \\
+    c_3    & a_{31} & a_{32}                          \\
+    \vdots & \vdots &        & \ddots &               \\
+    c_s    & a_{s1} & a_{s2} & \cdots & a_{s,s-1}     \\
+    \hline
+    (1)    & b_1    & b_2    & \cdots & b_{s-1} & b_s
+  \end{array}
+\end{equation}
+
+
+\emph{Implicit} $s$-stage Runge--Kutta scheme:
+\begin{equation}
+  \begin{array}{c|ccccc}
+    c_1    & a_{11} & a_{12} & a_{13} & \cdots & a_{1s} \\
+    c_2    & a_{21} & a_{22} & a_{23} & \cdots & a_{2s} \\
+    c_3    & a_{31} & a_{32} & a_{33} & \cdots & a_{3s} \\
+    \vdots & \vdots &        &        & \ddots &        \\
+    c_s    & a_{s1} & a_{s2} & a_{s3} & \cdots & a_{ss} \\
+    \hline
+    (1)    & b_1    & b_2    & b_3    & \cdots & b_s
+  \end{array}
+\end{equation}
+
+\colEmph{nonlinear system of equations} in each substep,\\
+\ColEmph{but}: desirable stability properties.
+
+\clearpage
+
+%%%
+\subsection{Order conditions}
+
+%
+\paragraph{All schemes} typically satisfy
+\begin{equation}
+  \color{math}
+  \sum\limits_{j=1}^{s} a_{ij} = c_i \; .
+\end{equation}
+%
+\paragraph{First-order} accuracy:
+\begin{equation}
+  \color{math}
+  \sum\limits_{i=1}^{s} b_{i} = 1 \; .  
+\end{equation}
+
+%
+\paragraph{Second-order} accuracy additionally requires
+\begin{equation}
+  \color{math}
+  \sum\limits_{i=1}^{s} b_{i} c_i = \dfrac{1}{2} \; .  
+\end{equation}
+
+%
+\paragraph{Third-order} accuracy additionally requires
+\begin{equation}
+  \color{math}
+  \sum\limits_{i=1}^{s} b_{i} c_i^2        = \dfrac{1}{3} \; ,
+  \qquad
+  \sum\limits_{i,j=1}^{s} b_{i} a_{ij} c_j = \dfrac{1}{6} \; .  
+\end{equation}
+
+%
+\paragraph{Fourth-order} accuracy additionally requires
+\begin{eqnarray}
+  \sum\limits_{i=1}^{s} b_{i} c_i^3                  =  \dfrac{1}{4}
+  \qquad
+  \sum\limits_{i,j=1}^{s} b_{i} c_{i} a_{ij} c_j     =  \dfrac{1}{8}
+  \qquad
+  \sum\limits_{i,j=1}^{s} b_{i} a_{ij} c_j^2         =  \dfrac{1}{12}
+  \qquad
+  \sum\limits_{i,j,k=1}^{s} b_{i} a_{ij} a_{jk} c_k  =  \dfrac{1}{24} \; .  
+\end{eqnarray}
+
+\medskip
+etc.
+
+\bigskip
+
+Total number of conditions:
+\medskip
+\begin{center}
+  \begin{tabular}{lllllllllll}
+  \toprule
+    \Black Order $p$
+        & 1 & 2 & 3 & 4 &  5 &  6 &  7 &   8 &  9  &   10\\
+  \midrule
+    \Black Conditions
+        & 1 & 2 & 4 & 8 & 17 & 37 & 85 & 200 & 486 & 1205\\
+  \midrule
+    \Black Minimum number of stages
+        & 1 & 2 & 3 & 4 & 6 & \\
+  \bottomrule
+  \end{tabular}
+\end{center}
+
+
+%%%
+\subsection{$2N$-schemes}
+
+Classical schemes: need to store all $\kv_i$.
+
+\medskip
+
+\cite{Williamson:LowStorage}: schemes that only need one $\yv$ and one
+$\kv$ array at a time\\
+(our \Code{f(:,:,:,1:mvar)} and \Code{df(:,:,:,:)}).
+
+\medskip
+
+\begin{center}
+  \begin{tabular}{lllllllllll}
+  \toprule
+    Order $p$  & 1 & 2 & 3 & 4 & 5 \\
+  \midrule
+    Minimum number of stages & 1 & 2 & 3 & 5 & 9 & \\
+  \bottomrule
+  \end{tabular}
+\end{center}
+
+\bigskip
+
+In a sense, we trade order for memory-efficiency.
+
+%%%
+\subsection{Linear Stability}
+
+\ColEmph{Linear stability analysis} for \colEmph{diffusion equation}
+\begin{equation}
+  \dfrac{\partial f}{\partial t}
+  = \nu \Laplace f
+\end{equation}
+leads to
+\begin{equation}
+  \dfrac{df}{dt} = - \nu k^2 \,f
+\end{equation}
+($k \simeq 1/\delta x$: an effective wave number for most
+unstable Fourier mode [normally the Nyquist mode]).
+
+Exact solution:
+\begin{equation}
+  \dfrac{f(t)}{f(0)} = e^{-\nu k^2 t}
+\end{equation}
+
+One (full) time step of a time-stepping scheme gives
+\begin{equation}
+  \dfrac{f(\delta t)}{f(0)} = A
+  \quad\text{(amplitude factor)}
+\end{equation}
+
+\begin{equation*}
+  \text{For} \quad
+  \begin{cases}
+    |A| < 1 &: \text{scheme is stable} \; , \\
+    |A| > 1 &: \text{scheme is unstable} \; . \\
+  \end{cases}
+\end{equation*}
+
+\clearpage
+
+Courant number: $\Courant \equiv \delta t \, \nu k^2$ (dimensionless time step). 
+
+\bigskip
+
+\begin{tabular}{@{}ll}
+  \Black
+  Exact:                           & $A(\Courant) = \exp(-\Courant)$\\[1.5ex]
+  \Black
+  $s$-stage explicit Runge--Kutta: & $A(\Courant)$ is polynomial of degree
+                                     $s$.\\[1.5ex]
+  \Black
+  General (implicit) Runge--Kutta: & $A(\Courant)$ is rational function
+                                     [Padé approx.\ to $\exp(-\Courant)$].
+\end{tabular}
+
+\clearpage
+
+\enlargethispage{1.8em}
+\centerline{%
+  \includegraphics[width=1.1\textwidth,height=0.68\textheight,keepaspectratio]%
+                  {stab-poly-classical}%
+}
+
+\vspace{-0.5\baselineskip}
+\begin{itemize}
+
+\item Higher-order explicit schemes
+  $\RedArrow$ larger stability interval.
+
+  \ColEmph{But:} also more substeps,
+  $\RedArrow$
+  $\dfrac{\text{total effort}}{\text{full time step}}
+  \approx \mathrm{const.}$
+
+\item For large $\Courant$, even implicit schemes give wrong result\\
+  But qualitatively correct:
+  \begin{itemize}
+  \item quickly decays
+  \item doesn't blow up
+  \end{itemize}
+
+\end{itemize}
+
+% ---------------------------------------------------------------------- %
+
+%%%%%%%%
+\section{Runge--Kutta--Chebyshev schemes}
+%%%%%%%%
+
+\colEmph{Wanted:} stability polynomial (degree $n$)
+with maximal stability interval
+
+\begin{itemize}
+\item $A(0) = 1$ (consistency)
+\item $A'(0) = -1$ (1st-order accurate)
+\item $A''(0) = 1$ (2nd-order accurate)
+\item \ldots
+\item $A(\Courant)$ oscillates between $1$ and $-1$ as often as possible
+\end{itemize}
+
+\bigskip
+
+Sounds familiar? $\rightarrow$ \ColEmph{Chebyshev polynomials}
+
+\clearpage
+
+%
+\paragraph{First-order Runge--Kutta--Chebyshev scheme:}
+\begin{equation}
+  \color{math}
+  A(\Courant)
+  = T_s\left(1 - \dfrac{\Courant}{s^2} \right)
+\end{equation}
+where $s = $ number of stages.
+
+\centerline{%
+  \includegraphics[width=1.1\textwidth,height=0.68\textheight,keepaspectratio]%
+                  {stab-poly-cheby-1}%
+}
+
+
+\begin{quote}
+  \itshape
+  ``\ldots have been rediscovered in the literature again and again\ldots''
+\end{quote}
+
+Stability interval $[0, 2\,s^2]$.
+
+\bigskip
+
+Any position where $|A(\Courant)| = 1$ is problematic (no damping at all).
+
+\RedArrow{} add safety margin $\varepsilon$, so $A(\Courant)$ oscillates
+between $-1+\varepsilon$ and $1-\varepsilon$.
+
+\bigskip
+
+
+\clearpage
+%
+\paragraph{Second-order Runge--Kutta--Chebyshev scheme:}
+
+With Chebyshev polynomials:
+\begin{equation}
+    A(\Courant)
+    = \dfrac{2}{3}
+      + \dfrac{1}{3\,s^2}
+      + \left( \dfrac{1}{3} - \dfrac{1}{3\,s^2} \right)
+        T_s\left( 1 + \dfrac{3\,\Courant}{s^2{-}1} \right)
+    \qquad
+    \text{(stable on $[0, 2\,s^2]$)}
+\end{equation}
+
+\centerline{%
+  \includegraphics[width=1.1\textwidth,height=0.68\textheight,keepaspectratio]%
+                  {stab-poly-cheby-2}%
+}
+
+
+\emph{Not} the optimal polynomial:
+just $\approx 80\%$ of optimal stability interval length.
+
+But still: $\Courant_{\rm crit} \approx 0.653 \, s^2$.
+
+I.\,e.~maximum stable time step $\propto s^2$, \quad number of substeps $=s$,\\[2ex]
+\RedArrow\quad
+$\dfrac{\text{total effort}}{\text{full time step}}
+  \propto \dfrac{1}{s}$
+
+\begin{center}
+\boldmath
+  \begin{tabular}{lll}
+  \toprule
+    \multicolumn{1}{c}{\Black \emph{Scheme}} &
+      \multicolumn{1}{c}{$\Courant_{\rm crit}$} &
+        \multicolumn{1}{c}{$\Courant_{\rm crit}/s$}\\
+  \midrule
+    \Black Euler                         & $2$    & $2$ \\
+    \Black 2nd-order 2-step Runge--Kutta & $2$    & $1$ \\
+    \Black 3rd-order 3-step Runge--Kutta & $2.51$ & $0.838$ \\
+  \midrule
+    \Black 2nd- order RKC, $s=2$         & $2$    & $1$ \\
+    \Black 2nd- order RKC, $s=5$         & $16.6$ & $3.32$ \\
+    \Black 2nd- order RKC, $s=10$        & $64.8$ & $6.48$ \\
+    \Black 2nd- order RKC, $s=20$        & $261$  & $13.0$ \\
+    \Black 2nd- order RKC, $s=40$        & $1040$ & $26.1$ \\
+    \Black 2nd- order RKC, $s=45$        & $1280$ & $28.4$ \\
+    \color{gray60}
+    2nd- order RKC, $\GreyedOut=50$      & $\GreyedOut1630$ & $\GreyedOut32.7$ \\
+    \color{gray60}
+    2nd- order RKC, $\GreyedOut=100$     & $\GreyedOut6530$ & $\GreyedOut65.3$ \\
+  \bottomrule
+  \end{tabular}
+\end{center}
+
+\clearpage
+
+%
+\paragraph{Turning this into a scheme:} \
+
+\colEmph{Internal stability:} A naïvely written $50$-stage scheme can
+catastrophically enhance roundoff error between the substeps.
+
+\cite{SommeijerEtal:RKC}: Use stable recurrence relation for Chebyshev
+polynomials to ensure internal stability.
+
+\bigskip
+
+\paragraph{Memory usage:} \
+
+\begin{tabular}{@{}ll}
+  5 slots              & \textcolor{blue}{\large \frownie} \\
+  independent from $s$ & \textcolor{blue}{\large \smiley \smiley}
+\end{tabular}
+
+\clearpage
+
+%
+\paragraph{Implementation}
+
+Perl script \colEmph{\texttt{generate\_timestep\_RKC}} generates appropriate
+variant  \colEmph{\texttt{timestep\_RKC-$s$.f90}}.
+
+\begin{itemize}
+\item Uses exact rational arithmetic internally
+\item Rounds only final numbers it puts into code
+\item Currently not as memory-efficient as could be
+\end{itemize}
+
+% ---------------------------------------------------------------------- %
+
+%%%%%%%%
+\section{Example}
+%%%%%%%%
+
+Kinematic $\alpha^2$-dynamo:
+
+$\alpha=\mathrm{const.}$ in a sphere $r<1$,
+\qquad
+$\eta = \begin{cases}
+    1 & \text{for $r<1$} \; , \\
+    8 & \text{for $r>1$}\\
+  \end{cases}$
+
+Box size: $3\times3\times3$;
+resolution: $64\times64\times64$
+\medskip
+
+{\small\color{DarkBlue}
+\begin{CodeVerbatim}[label=\BoxLabel{run.in}]
+  &run_pars
+    ! For eta_ext=8, stability limits are
+    !   itorder=3:  dt_eta=1.69e-5
+    !   RKC-40:     dt_eta=7.03e-3
+    dt=3.5e-3, tmax=2.0
+  /
+  &magnetic_run_pars
+    iresistivity='shell', wresistivity=0.03,
+    eta=1.0, eta_ext=8.0
+    ! For eta=1.0, eta_ext=4.0, critical alpha_effect is around 11.3
+    lmeanfield_theory=T, alpha_effect=15, alpha_quenching=0.
+    alpha_profile='const', lweyl_gauge=T
+  /
+\end{CodeVerbatim}
+}
+
+
+% ---------------------------------------------------------------------- %
+
+%%%
+\subsection{Comparison}
+\begin{enumerate}
+\item RKC-40 ($\equiv$ $40$-stage Runge--Kutta--Chebyshev)\\
+  \texttt{dt=3.50e-3} $\approx 0.5\,\delta t_{\rm crit}$
+\item RKC-20 ($\equiv$ $20$-stage Runge--Kutta--Chebyshev)\\
+  \texttt{dt=4.375e-4} $\approx 0.25\,\delta t_{\rm crit}$
+\item Standard 3rd-order Runge--Kutta scheme (Williamson)\\
+  \texttt{dt=7.00e-6} $\approx 0.5\,\delta t_{\rm crit}$
+\end{enumerate}
+(each at $\approx 1/2\,\delta t_{\rm max}$).
+Speed:
+\begin{enumerate}
+\item $71.9\,\dfrac{\unit{\mu s}}{\text{time step $\times$ grid pt}}$
+  (at 98.2\%)
+  {\ \RedArrow\ \ } 
+  $0.021\,\dfrac{\unit{s}}{\text{time unit $\times$ grid pt}}$
+\item$35.0\,\dfrac{\unit{\mu s}}{\text{time step $\times$ grid pt}}$
+  (at 98.7\%)
+  {\ \RedArrow\ \ } 
+  $0.080\,\dfrac{\unit{s}}{\text{time unit $\times$ grid pt}}$
+\item $4.77\,\dfrac{\unit{\mu s}}{\text{time step $\times$ grid pt}}$
+  (at 98.7\%)
+  {\ \RedArrow\ \ } 
+  $0.68\,\dfrac{\unit{s}}{\text{time unit $\times$ grid pt}}$
+\end{enumerate}
+\bigskip
+
+{\small\color{DarkBlue}
+\begin{CodeVerbatim}[label=\BoxLabel{top}]
+   PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND           
+  3693 wdobler   20   0  818m 196m 1916 R   99 10.4  21:30.87 run.x              
+  3741 wdobler   20   0  697m  96m 1900 R   95  5.1  18:22.56 run.x              
+\end{CodeVerbatim}
+}
+
+\clearpage
+
+\centerline{%
+  \includegraphics[width=1.1\textwidth,height=0.95\textheight,keepaspectratio]%
+                  {field-growth-1}%
+}
+
+\clearpage
+
+
+\centerline{%
+  \includegraphics[width=1.1\textwidth,height=0.85\textheight,keepaspectratio]%
+                  {field-growth-2}%
+}
+
+[Growth rate changed from $53.62$ (RK-40) to $\approx53.74$ (RK-20)]
+
+\clearpage
+
+Horizontal section (left: $\Bv$; right: $\tanh(\alpha \Bv$):
+\medskip
+
+\centerline{%
+  \includegraphics[width=0.48\textwidth,height=0.9\textheight,keepaspectratio]%
+                  {section_x-y}%
+  \hfill
+  \includegraphics[width=0.48\textwidth,height=0.9\textheight,keepaspectratio]%
+                  {section_x-y_vtanh}%
+}
+
+\clearpage
+
+Vertical section (left: $\Bv$; right: $\tanh(\alpha \Bv$)
+\medskip
+
+\centerline{%
+  \includegraphics[width=0.48\textwidth,height=0.9\textheight,keepaspectratio]%
+                  {section_x-z}%
+  \hfill
+  \includegraphics[width=0.48\textwidth,height=0.9\textheight,keepaspectratio]%
+                  {section_x-z_vtanh}%
+}
+
+
+% ---------------------------------------------------------------------- %
+
+%%%
+\subsection{Problem}
+
+RKC schemes with  $s >= 46$ fail due to round-off error (for double
+precision).
+
+Probably not \colEmph{internal instability} (RKC should be internally
+stable)
+
+Use RKC subroutine to evaluate (and plot) stability polynomial:
+\RedArrow{} same thing, roundoff error kills precision completely for
+$s > 45$.
+
+This is not mentioned in the papers, but appears to be inevitable.
+
+\bigskip
+
+Still not too bad: factor of 30 is tremendous.
+
+
+% ---------------------------------------------------------------------- %
+
+
+%%%%%%%%
+\section{Conclusions}
+%%%%%%%%
+
+\begin{itemize}
+
+\item RKC allows an up to $\approx 30$ times larger time step, just by
+  switching to\\
+{\small\color{DarkBlue}
+\begin{CodeVerbatim}[label=\BoxLabel{Makefile.local}]
+  TIMESTEP = timestpe_RKC-40
+\end{CodeVerbatim}
+}
+\item \colEmph{Moderate memory requirement}
+  (albeit higher than $2N$schemes)
+
+\item Works fine in cases where you would use implicit schemes
+
+\item Unclear: Interaction with dynamic time steps
+  \begin{itemize}
+  \item Disadvantage: Can only change time step after $s$ substeps
+  \item But moderate $s$ should still be better than classical
+    Runge--Kutta
+  \end{itemize}
+
+\item \ColEmph{Highly recommended} if your time step is limited by diffusion
+
+\end{itemize}
+
+% ---------------------------------------------------------------------- %
+
+\bibliography{numerik}
+\bibliographystyle{my-dcu}
+
+
+\end{document}
+
+% End of file multigrid.tex
+
+%%% Please leave this for Emacs [wd]:
+
+%% Local Variables:
+%% ispell-check-comments: t
+%% Local IspellDict: canadian
+%% End:
+
+% LocalWords:  ifpdf pdftex dvips substep lllllllllll mvar df substeps const nd
+% LocalWords:  lll crit RKC gray naïvely DarkBlue itorder dt tmax iresistivity
+% LocalWords:  wresistivity lmeanfield lweyl PID VIRT SHR wdobler RK

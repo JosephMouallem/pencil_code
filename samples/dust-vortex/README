@@ -1,0 +1,17 @@
+Directory:
+    ${PENCIL_HOME}/samples/dust-vortex
+SVN Id:
+    $Id$
+Maintainer:
+    Anders Johansen <anders/astro.lu.se>
+Added:
+    16-Apr-2005
+Status:
+    Working in this form since September 2007.
+Recommended resolution:
+    128x256x128 (nu=nud=2.0e-4)
+References:
+    ``Simulations of dust-trapping vortices in protoplanetary discs''
+    Johansen A., Andersen A. C., & Brandenburg A. 2004
+    Astronomy and Astrophysics, vol. 417, p. 361-374
+    [astro-ph/0310059]

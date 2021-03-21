@@ -1,0 +1,39 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+!  Run parameters
+!
+&run_pars
+  cvsid='$Id: run.in 9840 2008-09-05 07:29:37Z ajohan $'
+  nt=50, it1=20, isave=200, itorder=3
+  dsnap=2., d2davg=.5, ! time intervals for writing snapshots and phi-averages
+  dvid=1000., slice_position='m' ! time interval and position for slices
+  bcx = 'a','s','s','a2','sT','a','s','s'
+  bcy = 's','a','s','a2','sT','s','a','s'
+  bcz = 's','s','a','a2','sT','s','s','a'
+  tavg = 10.,                   ! time constant for time averaging
+  random_gen='nr_f90'
+  lpencil_check=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+  Omega=0.5,       ! amount and direction of angular velocity
+/
+&density_run_pars
+/
+&grav_run_pars
+/
+&entropy_run_pars
+  iheatcond='chi-const', chi=1e-3
+  luminosity=.01, wheat=0.18
+  cooltype='cs2-rho', cool=5., rcool=1.1, wcool=0.1
+/
+&magnetic_run_pars
+  eta=6e-4
+/
+&viscosity_run_pars
+  nu=1e-3, ivisc='nu-const'
+/
+&special_run_pars
+  term_that_vincent_needs=2.
+/

@@ -1,0 +1,107 @@
+#!/bin/csh
+#
+# Name: pc_llsubmit
+# Author: Anders Johansen
+# Date: 20-aug-2004
+# Description:
+#   Shell script to easily submit jobs to the LoadLeveler queuing system.
+#   LoadLeveler variables are input as -variable=value.
+#
+#   Default values are supplied by pc_llsubmit, so only non-default values need
+#   to be supplied at the command line.
+#
+# Usage:
+#   pc_llsubmit [-var1=val1] ... [-varN=valN] [-quiet] filename
+#   
+#   Example: pc_llsubmit -class=small start_run.csh
+#
+# Options:
+#   -quiet: Don't cat the contents of the resulting jobscript
+#
+# Based on sleipsub (by theine)
+#
+foreach block ($argv)
+  if ("$block" =~ -*) then # non filename
+    if ("$block" =~ *=*) then  # variable
+      set variable = `perl -e "@a = split /=/, '$block'; print @a[0]"`
+      set value    = `perl -e "@a = split /=/, '$block'; print @a[1]"`
+      set variable = `perl -e "@a = substr('$variable',1); print @a[0]"`
+      set $variable = $value
+    else # option
+      set option   = `perl -e "@a = substr('$block',1); print @a[0]"`
+      set $option
+    endif
+  else # filename
+    set filename = $block
+  endif
+end
+#
+# Save command and options to the file .history_qsub for later copy paste.
+#
+echo "`date`" >> .history_qsub
+echo "pc_llsubmit $argv" >> .history_qsub
+#
+# Default filename
+#
+if (! $?filename) set filename = start_run.csh
+#
+# LoadLeveler default values
+#
+if (! $?node) set node = 1
+if (! $?tasks_per_node) set tasks_per_node = 1
+if (! $?wall_clock_limit) set wall_clock_limit = 50:00:00
+if (! $?networkMPI) set networkMPI =
+if (! $?job_name) set job_name = $filename
+if (! $?job_type) set job_type = parallel
+if (! $?total_tasks && ! $?tasks_per_node) set total_tasks = `perl -ne '$_ =~ /^\s*integer\b[^\\!]*ncpus\s*=\s*([0-9]*)/i && print $1' src/cparam.local`
+if (! $?class) set class =
+if (! $?environment) set environment = "PENCIL_HOME=$PENCIL_HOME"
+if (! $?input) set input = /dev/null
+if (! $?output) set output = \$\(job_name\).\$\(jobid\).out
+if (! $?error) set error = $output
+if (! $?resources) set resources = 
+if (! $?notification) set notification = never
+if (! $?bg_size) set bg_size =
+if (! $?bg_connection) set bg_connection =
+if (! $?notify_user) set notify_user =
+#
+# write temporary jobscript
+#
+echo "#\!/bin/sh" > pc_llsubmit.tmp
+echo "# @ job_name = $job_name" >> pc_llsubmit.tmp
+echo "# @ job_type = $job_type" >> pc_llsubmit.tmp
+if ($node != '') echo "# @ node = $node" >> pc_llsubmit.tmp
+if ($tasks_per_node != '') then
+  if ($?tasks_per_node) then
+    echo "# @ tasks_per_node = $tasks_per_node" >> pc_llsubmit.tmp
+  else
+    echo "# @ total_tasks = $total_tasks" >> pc_llsubmit.tmp
+  endif
+endif
+echo "# @ wall_clock_limit = $wall_clock_limit" >> pc_llsubmit.tmp
+if ($networkMPI != '') echo "# @ network.MPI = $networkMPI" >> pc_llsubmit.tmp
+echo "# @ class = $class" >> pc_llsubmit.tmp
+echo "# @ environment = $environment" >> pc_llsubmit.tmp
+echo "# @ executable = $filename" >> pc_llsubmit.tmp
+echo "# @ input = $input" >> pc_llsubmit.tmp
+echo "# @ output = $output" >> pc_llsubmit.tmp
+echo "# @ error =  $error" >> pc_llsubmit.tmp
+echo "# @ notification = $notification" >> pc_llsubmit.tmp
+echo "# @ notify_user = $notify_user" >> pc_llsubmit.tmp
+echo "# @ resources = $resources" >> pc_llsubmit.tmp
+if ($bg_size != '') echo "# @ bg_size = $bg_size" >> pc_llsubmit.tmp
+if ($bg_connection != '') echo "# @ bg_connection = $bg_connection" >> pc_llsubmit.tmp
+echo "# @ queue" >> pc_llsubmit.tmp
+echo "cd `pwd`" >> pc_llsubmit.tmp
+echo "./$filename" >> pc_llsubmit.tmp
+#
+# Print out contents of jobscript
+#
+if (! $?quiet) cat pc_llsubmit.tmp
+#
+# Submit temporary jobscript and remove it afterwards.
+#
+llsubmit pc_llsubmit.tmp && rm -f pc_llsubmit.tmp
+#
+# End of file pc_llsubmit
+#

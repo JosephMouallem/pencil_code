@@ -1,0 +1,43 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$',
+  ip=14,                      ! debugging parameter
+  xyz0  = -2.6,-2.6,-0.26,    ! first corner of box
+  xyz1  =  2.6, 2.6, 0.26,    ! second corner of box
+  lperi = T  , T , T,         ! periodic direction?
+
+  r_int=0.0,                  ! radius of interior spherical boundary
+  r_ext=2.5,                  ! radius of exterior spherical boundary
+  lcylinder_in_a_box=T
+  llocal_iso=T
+  lwrite_ic=T
+/
+&eos_init_pars
+  cs0=0.05 
+  rho0 = 1.
+/
+&hydro_init_pars
+  inituu='gaussian-noise'
+  ampluu=1e-3
+/
+&density_init_pars
+  initlnrho='globaldisc'
+  lnrho_const=0.  
+  ldensity_nolog=T
+  temperature_power_law=1,density_power_law=0.
+  lsoftened=T
+/
+&grav_init_pars
+  ipotential='smoothed-newton' 
+  g0=1.,r0_pot=0.1,n_pot=2
+  lcylindrical_gravity=T
+/
+&magnetic_init_pars
+  B_ext=0,0,1e-3
+  initaa='zero'
+/
+&special_init_pars
+/

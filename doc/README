@@ -1,0 +1,38 @@
+$Id$
+
+In manual.tex we try to keep a reasonably up-to-date description of the code.
+For latex installations that don't have some of the less frequent style files,
+we keep a selection in the texinputs/ directory. If you use the makefile to
+process manual.tex, you will automatically have that directory included in
+your TeX path.
+
+Note that you need to make sure a sufficiently recent version of
+index.sty is first in your TEXINPUTS. The Makefile takes care of this.
+
+If you cannot compile the text locally, you can get the
+pdf file of the latest version with
+   wget http://pencil-code.nordita.org/doc/manual.pdf
+
+Since April 2015, the web pages of the Pencil Code are on
+
+  svn checkout https://github.com/pencil-code/website
+
+In practice, we tend to keep it in a neighboring directry,
+e.g. ../www/doc, so after updating manual.tex, we have to compile it
+and copy the pdf file to ../www/doc, where we then check it in.
+
+-------------------------------------------------------------------------------
+make faq
+can lead to problems. As root, edit the file texmf.cnf as follows:
+< main_memory = 263000 % words of inimemory available; also applies to inimf&mp
+> main_memory = 383999 % words of inimemory available; also applies to inimf&mp
+
+< hash_extra = 0
+> hash_extra = 15000
+
+< max_strings = 15000
+> max_strings = 30000
+
+< pool_size = 125000
+> pool_size = 250000
+

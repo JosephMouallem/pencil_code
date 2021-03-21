@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# $Id$  
+# Script to automatically check correctness of the *.in files.
+#  
+
+SCRIPTNAME="pc_configtest"
+AUTOCORRECTOR="pc_autocorrect_config"
+SCRIPT="src/pre_and_post_processing/$SCRIPTNAME.x"
+SUCCESS="CONFIGTEST: > SUCCESSFUL <"
+FAILURE="CONFIGTEST: > FAILED <"
+
+if [ ! -e "$SCRIPT" ]; then
+	echo "Please compile first by executing \"pc_build\"."
+	exit 1
+fi
+
+if [ "$1" != "--no-autocorrect" ]; then
+	# Execute first the *.in files autocorrection with creation of backup copies.
+	# Currently, this is done in test-mode only, remove "-t" to become productive.
+	$AUTOCORRECTOR -t -b
+fi
+
+MESSAGE=`$SCRIPT`
+RESULT=`echo -n "$MESSAGE" | grep "$SUCCESS"`
+
+if [ "$RESULT" != "" ]; then
+	echo $SUCCESS
+	exit 0
+fi
+
+echo "ERROR REPORT:"
+echo "============="
+echo "$MESSAGE"
+echo "$FAILURE"
+rm -f ERROR
+exit 1
+

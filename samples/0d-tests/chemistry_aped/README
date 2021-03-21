@@ -1,0 +1,15 @@
+Directory:
+    ${PENCIL_HOME}/samples/0d-tests/chemistry_aped
+SVN Id:
+    $Id$
+Maintainer:
+    Axel Brandenburg <brandenb/nordita[dot]dk>
+Added:
+     5-Mar-2008
+Status:
+    Works since 2008/03/05
+Recommended resolution:
+    1x1x1 (zero-dimensional run)
+Comments:
+    uses the files, chemistry_m.dat, chemistry_p.dat
+    simulates the APED model of Plasson et al. (2004, PNAS)

@@ -1,0 +1,13 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Initialisation parameters for forced helical MHD turbulence
+!
+&init_pars
+  cvsid='$Id$',
+/
+&testfield_init_pars
+  luxb_as_aux=T
+/
+&shear_init_pars
+  Sshear=-.6
+/

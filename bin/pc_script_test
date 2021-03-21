@@ -1,0 +1,189 @@
+#!/usr/bin/perl -w
+
+# Usage:
+#   pc_script_test [dir1 [dir2 [...]]]
+#
+# Description:
+#   Run tests in tests/ directories. These are normally tests of
+#   Python or IDL scripts, or similar.
+#   For each directory given, we recursively scan for subdirectories
+#   named 'tests'. If no directories are given, the directories
+#   tests/, samples/, runs/ of ${PENCIL_HOME} are used as starting
+#   points.
+#
+#   Under each tests/ directory, we look for test files (which may be
+#   located deeper in subdirectories).
+#   The contract for a test file:
+#   - It is named <test_name>.<suff>, where <suff> is a known suffix
+#   - <suff> (currently supported: py, pro).
+#   - The file is executable and can be run from the tests directory
+#     (thus, many of the test scripts read data from '../data/').
+#   - When run, the script writes a file <test_name>.out in the same
+#     directory.
+#   - There exist a file <test_name>.ref in the same directory that defines
+#     the reference data and possibly accuracy.
+#
+#   Each test script is run (if we find an appropriate interpreter)
+#   and the <test_name>.out file is compared to the reference data
+#   <test_name>.ref .
+#
+# Examples:
+#   pc_script_test       # Run all tests under $PENCIL_HOME/{tests,samples,runs}/
+#   pc_script_test <dir> # Run all tests under the given directory
+
+# # TODO:
+# - scan directories for 'test'
+# - find test files
+# - for each test file:
+# -   cd to its directory
+# -   run it
+# -   compare .ref and .out files
+# -   [should we allow the case where no .ref exists and no .out is written?]
+# -   Give some output [spinner or '.', or ...]
+# - summarize results
+
+use strict;
+
+
+BEGIN {
+    # Make sure ${PENCIL_HOME}/lib/perl is in the Perl path
+    if (-d "$ENV{PENCIL_HOME}/lib/perl") {
+        unshift @INC, "$ENV{PENCIL_HOME}/lib/perl";
+    } else {
+        if ($0 =~ m!(.*[/\\])!) { unshift @INC, "$1../lib/perl"; }
+    }
+}
+
+use Pencil::Util;
+Pencil::Util::use_pencil_perl_modules('Test::ScriptTester')
+  or die;
+
+use Getopt::Long;
+# Allow for `-Plp' as equivalent to `-P lp' etc:
+Getopt::Long::config("bundling");
+
+my %opts;                     # Options hash for GetOptions
+
+## Process command line
+GetOptions(\%opts,
+           qw( -h   --help
+               -t=s --type=s
+                    --debug
+               -q   --quiet
+               -v   --version
+            )
+          ) or die "Aborting.\n";
+
+my $debug = ($opts{'debug'} ? 1 : 0 );  # undocumented debug option
+if ($debug) {
+    printopts(\%opts);
+    print "\@ARGV = `@ARGV'\n";
+}
+
+my $cmdname = (split('/', $0))[-1];
+
+
+if ($opts{'h'} || $opts{'help'})    { die usage();   }
+if ($opts{'v'} || $opts{'version'}) { die version(); }
+
+my $default_types = "python:idl";
+my @types = split(/:/, $opts{'t'} || $opts{'type'}  || $default_types);
+my $quiet = $opts{'q'} || $opts{'quiet'} || '';
+
+my %run_dispatch_table = (
+    python => \&run_python_script,
+    idl    => \&run_idl_script,
+);
+
+my @default_dirs = (
+    "$ENV{PENCIL_HOME}/tests",
+    "$ENV{PENCIL_HOME}/samples",
+    "$ENV{PENCIL_HOME}/runs",
+    );
+my @top_dirs = @ARGV
+  ? @ARGV
+  : @default_dirs;
+
+my $tester = Test::ScriptTester->new(\@top_dirs);
+my ($good_count, $bad_count) = $tester->run();
+
+my $separator = ('-' x 70) . "\n";
+print "$separator";
+
+my $total_count = $good_count + $bad_count;
+if ($bad_count) {
+    print "$bad_count out of $total_count tests failed.\n";
+} else {
+    print "All $total_count tests succeeded.\n";
+}
+
+print "$separator";
+
+exit $bad_count;
+
+
+sub debug {
+    my @args = @_;
+
+    if ($debug) {
+        my $string = join(' ', @args);
+        chomp($string);
+        print "$string\n";
+    }
+}
+
+
+sub printopts {
+# Print command line options
+    my ($optsref) = @_;
+    my %opts = %$optsref;
+    foreach my $opt (keys(%opts)) {
+        print STDERR "\$opts{$opt} = '$opts{$opt}'\n";
+    }
+}
+
+
+sub usage {
+# Extract description and usage information from this file's header.
+    my $thisfile = __FILE__;
+    local $/ = '';              # Read paragraphs
+    open my $fh, '<', $thisfile or die "Cannot open $thisfile\n";
+    while (<$fh>) {
+        # Paragraph _must_ contain `Description:' or `Usage:'
+        next unless /^
+                     \s* \# \s*
+                     ( Description | Usage )
+                     :
+                    /mx;
+        # Drop `Author:', etc. (anything before `Description:' or `Usage:')
+        s/^
+          (?: .*? \n) ??
+          (
+              \s* \# \s*
+              (?: Description | Usage )
+              :
+              \s*
+              \n
+              .*
+          )
+         / $1
+         /sx;
+        # Don't print comment sign:
+        s/^\s*# ?//mg;
+        last;                        # ignore body
+    }
+    close $fh;
+    return $_ or "<No usage information found>\n";
+}
+
+
+sub version {
+# Return SVN/CVS data and version info.
+    my $doll='\$';              # Need this to trick SVN/CVS
+    my $rev = '$Revision: 1.12 $';
+    my $date = '$Date: 2008/07/07 21:37:16 $';
+    $rev =~ s/${doll}Revision:\s*(\S+).*/$1/;
+    $date =~ s/${doll}Date:\s*(\S+).*/$1/;
+
+    return "$cmdname version $rev ($date)\n";
+}

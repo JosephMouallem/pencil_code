@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+##
+## $Id$
+##
+## Extract simulation directory of queued jobs.
+##
+## Usage:
+##   'pc_qjobname' gives directories of all jobs belonging to the user
+##   'pc_qjobname jobid' gives directory of selected job
+##
+## Different queuing systems require different treatment. Add new host
+## names according to the relevant queuing system below.
+##
+$host = `hostname`;
+#
+# Go through list of hosts to use proper method.
+#
+if ($host =~ /fe[0-9]/ or $host =~/tpb[0-9]/ or $host =~/platon.int/ or $host =~ /stokes/){  # PBS
+
+  if ($#ARGV ne -1) { @jobs = @ARGV; }
+  else {
+    @jobs = `qstat | grep $ENV{'USER'} `;
+      foreach $job (@jobs) { $job =~ /([0-9]*\.[a-z\-]*)/; $job=$1; }
+    }
+
+  foreach $job (@jobs){
+    $a = `qstat -f $job`;
+    $a =~ s/\s//g;
+    $a =~ /PBS_O_WORKDIR=([^,]*),/;
+    $a = $1;
+    if ($1 =~ /^\s*$/){
+      $a = `qstat -f $job`;
+      $a =~ s/\s//g;
+      $a =~ /PBS_O_WORKDIR=(.*),/;
+      $a =~ /PBS_O_WORKDIR=(.*)etime/;
+      $a = $1;}
+    $a =~ s/$ENV{'HOME'}/\~/g;
+    print "$job : $a\n";
+    }
+
+  }
+elsif ($host =~ /riologin/ or $host =~ /pia/ or $host =~ /theo/){   # SGE
+  
+  if ($#ARGV ne -1) { @jobs = @ARGV; }
+  else {
+    @jobs = `qstat | grep $ENV{'USER'} | sort`;
+    foreach $job (@jobs) { $job =~ s/^ +([0-9]*)/$1/g; $job=$1; chomp $job; }
+    }
+
+  foreach $job (@jobs){
+    $a = `qstat -j $job | grep cwd:`;
+    $a =~ /(\/.*)$/;
+    $a = $1;
+    $a =~ s/$ENV{'HOME'}/\~/g;
+    print "$job : $a\n";
+    }
+
+  }
+elsif ($host =~ /p6012/ or $host=~ /jugene/ or $host=~ /genius/){ # LoadLeveler
+  
+  if ($#ARGV ne -1) { @jobs = @ARGV; }
+  else {
+    @jobs = `llq | grep $ENV{'USER'} | sort`;
+    foreach $job (@jobs) { $job =~ s/ .*//g; chomp $job; }
+    }
+
+  foreach $job (@jobs){
+
+    $a = `llq -l -j $job | grep "Initial Working Dir"`;
+    $a =~ /(\/.*)$/;
+    $a = $1;
+    $a =~ s/$ENV{'HOME'}/\~/g;
+    $a =~ s/\/gpfs\/automountdir//g;
+    $a =~ s/\/gpfs\/h05\/$ENV{'USER'}/\~/g;
+    print "$job : $a\n";
+    }
+  }
+elsif ($host =~ /alarik/ or $host =~ /aurora/){ # SLURM
+  
+  if ($#ARGV ne -1) { @jobs = @ARGV; }
+  else {
+    @jobs = `squeue | grep $ENV{'USER'} | sort`;
+    foreach $job (@jobs) { $job =~ s/^\s+//g; $job =~ s/ .*//g; chomp $job;}
+    }
+
+  foreach $job (@jobs){
+
+    $a = `scontrol show job $job | grep WorkDir`;
+    $a =~ s/   WorkDir=//;
+    $a =~ s/\n//;
+    print "$job : $a\n";
+    }
+
+  }

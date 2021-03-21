@@ -1,0 +1,51 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$',
+  ip=14,                        ! debugging parameter
+  xyz0  = -2.6,-2.6,-0.26,       ! first corner of box
+  xyz1  =  2.6, 2.6, 0.26,       ! second corner of box
+  lperi = T  , T  , T,         ! periodic direction?
+
+  r_int=0.4,                   ! radius of interior spherical boundary
+  r_ext=2.5,                   ! radius of exterior spherical boundary
+  lcylinder_in_a_box=T
+  llocal_iso=T
+  lcylindrical_gravity=T
+  random_gen='nr_f90'
+/
+&initial_condition_pars
+  temperature_power_law=2
+  density_power_law=0
+  initcond_aa='Alfven-zconst'
+/
+&eos_init_pars
+  cs0=0.1 
+  rho0 = 1.
+  gamma=1.
+/
+&hydro_init_pars
+  inituu='gaussian-noise'
+  ampluu=1e-4
+/
+&density_init_pars
+  lnrho_const=0.  
+  ldensity_nolog=T
+/
+&grav_init_pars
+  ipotential='no-smooth'
+  g0=1.
+/
+&magnetic_init_pars
+/
+&special_init_pars
+/
+&particles_init_pars
+  initxxp='random-cylindrical', initvvp='Keplerian'
+  tausp=1.0
+  lparticlemesh_tsc=T
+  bcpx='flk',bcpy='rmv'
+  eps_dtog=0.01
+/

@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Name:   check-mkfile
+# Author: PABourdin
+# Date:   05-Nov-2016
+# Description:
+#   Remove trailing white spaces in Makefile assignment lines.
+# Usage:
+#   check-mkfile file1 [file2 [file3 [...]]]
+
+for arg in "$@"
+do
+	grep -qP '^\s*[^#=]+=.*?\S\s+$' "${arg}"
+	if [ $? -eq 0 ] ; then
+		sed 's/^\(\s*[^#=]\+=.*\S\)\s\+$/\1/g' --follow-symlinks -i "${arg}"
+	fi
+done

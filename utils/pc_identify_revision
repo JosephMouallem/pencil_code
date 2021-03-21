@@ -1,0 +1,98 @@
+#!/bin/sh
+
+# Description:
+#   Try hard to identify the current revision of the code.
+#   Works for Git and the Github SVN bridge.
+#   For a SVN sandbox, requires connection to (and authentication
+#   with) the server.
+# Usage:
+#   pc_identify_revision [--reset|-r] [--print-file-name|-p]
+# Examples:
+#   pc_identify_revision                    # Write revision file
+#   pc_identify_revision --reset            # Delete revision file
+#   pc_identify_revision --print-file-name  # print name of rev. file
+
+revision_file='revision.txt'
+quiet=''                        # set to '1' to suppress diff output
+
+
+reset_locale () {
+    # Reset the locale to make the output from e.g. 'svn info' predictable.
+    # Sometimes LANG is crucial, sometimes only LANGUAGE or LC_ALL are.
+    export LANG=POSIX
+    export LANGUAGE="${LANG}" LC_ALL="${LANG}"
+}
+
+
+check_prerequisites () {
+    # Sanity checks.
+    # Some of these requirements could be weakened, but it is better
+    # to play safe.
+    if [ -z $PENCIL_HOME ]; then
+        echo "Error: \$PENCIL_HOME must be set."
+        exit 1
+    fi
+}
+
+
+write_revision_file () {
+    printf 'Revision: ' >> ${revision_file}
+
+    if [ -d "${PENCIL_HOME}/.git" ]; then
+        write_revision_file_from_git_sandbox
+    elif [ -d "${PENCIL_HOME}/.svn" ]; then
+        write_revision_file_from_svn_sandbox
+    else
+        echo 'Warning: Cannot determine a revision number' \
+            >> ${revision_file}
+    fi
+}
+
+
+write_revision_file_from_git_sandbox () {
+    git_cmd rev-parse HEAD >> ${revision_file}
+    git_cmd status --short --untracked-files=no >> ${revision_file}
+}
+
+
+write_revision_file_from_svn_sandbox () {
+    # SVN revision:
+    svn_cmd info | grep 'Last Changed Rev' >> ${revision_file}
+    svn_cmd status | (grep -Ev '^\?' || true) >> ${revision_file}
+}
+
+
+git_cmd () {
+    # Run a git command from the top directory
+    (cd $PENCIL_HOME; git "$@")
+}
+
+
+svn_cmd () {
+    # Run a SVN command from the top directory
+    (cd $PENCIL_HOME; svn "$@")
+}
+
+
+main () {
+    if [ "$1" = "--print-file-name" -o "$1" = "-p" ]; then
+        echo "${revision_file}"
+        exit 0
+    elif [ "$1" = "--reset" -o "$1" = "-r" ]; then
+        write_file=''
+    else
+        write_file=1
+    fi
+
+    reset_locale
+
+    check_prerequisites
+    rm -f ${revision_file}
+
+    if [ $write_file ]; then
+        write_revision_file
+    fi
+}
+
+
+main "$@"

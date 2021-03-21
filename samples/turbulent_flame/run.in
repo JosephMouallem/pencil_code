@@ -1,0 +1,31 @@
+!
+!  Run parameters for Kelvin-Helmholtz turbulence.
+!
+&run_pars
+  cvsid='$Id: run.in,v 1.1 2010-05-19 14:36:03 nilshau Exp $',
+  nt=300000, it1=10, cdtv=0.4, isave=100, itorder=3
+  dsnap=5e-4, dvid=1e-6, dtmin=1e-30, dt=2e-8
+  lpencil_check=F, lpencil_check_small=F, lpencil_check_no_zeros=F
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+  lupw_lnrho=T
+/
+&entropy_run_pars
+  lupw_lnTT=T
+/
+&chemistry_run_pars
+  lfilter=T
+  reinitialize_chemistry=T
+/
+&viscosity_run_pars
+ ivisc='nu-mixture'
+/
+&NSCBC_run_pars
+  inlet_from_file=T
+  turb_inlet_dir='./turbulent_box'
+  notransveral_terms=T
+/

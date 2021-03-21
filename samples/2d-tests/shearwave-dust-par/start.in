@@ -1,0 +1,29 @@
+!                              -*-f90-*-     (for emacs)
+!
+!  Initialisation parameters for particle-gas shear wave test.
+!
+&init_pars
+    lwrite_ic = .true., lwrite_aux = .true.
+/
+&eos_init_pars
+    gamma = 1.0, rho0 = 1.0, cs0 = 1.0
+/
+&hydro_init_pars
+    inituu = 'coswave-phase'
+    ampl_uy = 0.001, kx_uy = -1.0, ky_uy = 1.0
+/
+&density_init_pars
+    ldensity_nolog = .true.
+/
+&shear_init_pars
+    Omega = 1.0, qshear = 1.5
+    lshearadvection_as_shift = .true., shear_method = 'bspline'
+/
+&particles_init_pars
+    particle_mesh = 'tsc'
+    initxxp = 'equidistant', initvvp = 'zero'
+    eps_dtog = 1.0
+/
+&particles_drag_init_pars
+    tdrag = 1.0
+/

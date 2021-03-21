@@ -1,0 +1,5 @@
+#!/bin/sh
+#$Id$
+echo ""
+less -S $PENCIL_HOME/license/developers.txt
+

@@ -1,0 +1,733 @@
+#!/bin/sh
+# -*-perl-*-
+# ====================================================================== #
+# Run the right perl version:
+if [ -x /usr/local/bin/perl ]; then
+  perl=/usr/local/bin/perl
+elif [ -x /usr/bin/perl ]; then
+  perl=/usr/bin/perl
+else
+  perl=`which perl| sed 's/.*aliased to *//'`
+fi
+
+exec $perl -x -S $0 "$@"     # -x: start from the following line
+# ====================================================================== #
+#! /Good_Path/perl -w
+# line 17
+#
+# Name:   pencil-test
+# Author: wd (Wolfgang.Dobler@kis.uni-freiburg.de)
+# $Date: 2008-07-11 05:02:53 $
+# $Revision: 1.40 $
+# Description:
+#   Run the pencil code's auto test on some remote host(s) and wrap
+#   results in HTML if required. Can be used from crontab.
+# Usage:
+#   pencil-test [options] host1 [host2 [host3 ..]]
+#   pencil-test -l [options]
+# Options:
+#   -h, --help                -- Help
+#   -l, --local               -- Run on the local host
+#   -H, --html                -- Write output as elementary HTML (mostly <pre>)
+#   -X, --xml                 -- Write output as XML
+#   -u, --update              -- Update everything before compiling
+#   -r, --reload              -- Do 'touch RELOAD' after every time step
+#   -s, --short               -- Use short directory names
+#   -c, --clean               -- 'make cleann' before compiling
+#   -D <DIR>,
+#       --pencil-home=<DIR>   -- set PENCIL_HOME directory to DIR
+#   -N <N>, --nice=<N>        -- Run tests with nice value of <N>
+#   -i <file>,
+#       --infofile=<file>     -- After last test, print content of <file>
+#   -m <emaillist>,
+#       --mail=<emaillist>    -- Specify who to send mail to if tests fail
+#   -M <mailer>,
+#      --Mailer=<mailer>      -- Specify e-mail program to use
+#   -p <PP>,
+#       --postproc=<PP>       -- Use postprocessor <PP> for output from make
+#       --script-tests=TYPES  -- Run script tests matching TYPES, a
+#                                comma-separated list of types
+#                                'type1,type2,...', or a map
+#                                (comma-separated list of colon-separated
+#                                associations
+#                                'type1:interp1,type2:interp2,...'. Use
+#                                'DEFAULT' to get all configured types
+#                                with their default interpreters
+#   -t <limit>,
+#       --time-limit=<limit>  -- Limit total time for each {start,run}.x phase
+#   -T <file>,
+#       --timings-file=<file> -- Append timings to <file>
+#   -b
+#       --use-pc_auto-test    -- Run pc_auto-test as backend, not auto-test
+#                                (mnemonic: compile with 'build', not 'make').
+#                                Eventually, this will become the default.
+#   -Wa,<options>
+#       --auto-test-options=<options>
+#                             -- Pass <options> to pc_auto-test. If <options>
+#                                contains commas, it is split into multiple
+#                                options at the commas
+#
+# Email list syntax:
+#   -m '{-:fluxrings},defaulty@any.where,nosy@some.where{+:fluxrings,+:rad1},ignorant@else.where{-:hydro.*}'
+#   will not send mail if 'interlocked-fluxrings' fails -- except for Nosy
+#   who explicitly requested this. Ignorant will not get emails if only 'hydro1'
+#   or 'hydrogen-bond' fail. Note that the patterns are anchored at the end,
+#   but not at the beginning.
+# Sample crontab entry:
+#   30 02 * * *  cd $HOME/pencil-auto-test && svn up && bin/pencil-test --clean --html --mail=my@email.net --nice=15 --reload --short --timings-file=$HOME/public_html/autotest_timings.txt > $HOME/public_html/autotest.html
+
+use strict;
+use POSIX qw(strftime);
+use Getopt::Long;
+use IPC::Open2;
+use constant SUCCESS => 1;      # return value
+
+my (%opts);                     # Variables written by GetOptions
+my (%emails, %pos, %neg, %sendmailto); # Info on mailing if tests fail
+
+## Process command line
+my $commandline = $0.' '.join (' ', @ARGV);
+eval {
+    Getopt::Long::config("bundling");
+};
+GetOptions(\%opts,
+           qw( -h   --help
+                    --debug
+               -v   --version
+               -l   --local
+               -H   --html
+               -X   --xml
+               -u   --update
+               -U
+               -r   --reload
+               -s   --short
+               -c   --clean
+               -D=s --pencil-home=s
+               -N=s --nice=s
+               -i=s --infofile=s
+               -m=s --mail=s
+               -M=s --Mailer=s
+               -p=s --postproc=s
+                    --script-tests=s
+               -t=s --time-limit=s
+               -T=s --timings-file=s
+                    --tag-stable
+               -b   --use-pc_auto-test
+               -W=s --auto-test-options=s
+               )) or die "Aborting.\n";
+die '$Id$ ' . "\n"
+            if    ($opts{'v'} || $opts{'version'});
+die usage() if    ($opts{'h'} || $opts{'help'});
+my $debug       = (              $opts{'debug'}       || 0 );
+my $html        = ($opts{'H'} || $opts{'html'}        || 0 );
+my $local       = ($opts{'l'} || $opts{'local'}       || 0 );
+my $clean       = ($opts{'c'} || $opts{'clean'}       || 0 );
+my $pencil_home = ($opts{'D'} || $opts{'pencil-home'} || '$PENCIL_HOME' || `pwd`);
+my $nice        = ($opts{'N'} || $opts{'nice'}        || 0 );
+my $infofile    = ($opts{'i'} || $opts{'infofile'}    || '' );
+my $update      = ($opts{'u'} || $opts{'update'}      || $opts{'U'}  || 0 ); # keeping -U for backwards compatibility
+my $reload      = ($opts{'r'} || $opts{'reload'}      || 0 );
+my $short       = ($opts{'s'} || $opts{'short'}       || 0 );
+my $tag_stable  = (              $opts{'tag-stable'}  || 0 );
+my $emails      = ($opts{'m'} || $opts{'mail'}        || '');
+my $mailer      = ($opts{'M'} || $opts{'Mailer'}      || '');
+my $postproc    = ($opts{'p'} || $opts{'postproc'}    || '');
+my $script_tests = (             $opts{'script-tests'} || '');
+my $time_limit  = ($opts{'t'} || $opts{'time-limit'}  || '');
+my $timingsfile = ($opts{'T'} || $opts{'timings-file'}|| '');
+my $with_xml    = ($opts{'x'} || $opts{'xml'}         || '');
+my $use_build   = ($opts{'b'} || $opts{'use-pc_auto-test'} || '');
+
+my @auto_test_options = ();
+if (defined $opts{'W'}) {
+    if ($opts{'W'} =~ /^Wa,(.*)/) {
+        my $autotest_opts = $1;
+        $autotest_opts =~ s/^\'(.*)\'$/$1/s;
+        push @auto_test_options, split(/\s*,\s*/, $autotest_opts);
+    } else {
+        die "Unknown option <-".$opts{'W'}.">\n";
+    }
+}
+if (defined $opts{'auto-test-options'}) {
+    $opts{'auto-test-options'} =~ s/^\'(.*)\'$/$1/s;
+    push @auto_test_options, split(/\s*,\s*/, $opts{'auto-test-options'});
+}
+
+my $blurb = "[This message was automatically generated by the 'pencil-test' script]\n";
+my ($xml);
+
+# Too few or too many arguments?
+if ($local) {
+    die "No host arguments allowed with -l option.\n" if (@ARGV);
+} else {
+    die usage() unless (@ARGV);
+}
+
+# Make sure we have /usr/sbin in path (which is where sendmail is often located)
+$ENV{PATH} = "$ENV{PATH}:/usr/sbin" unless ($ENV{PATH} =~ m{(^|:)/usr/sbin($|:)});
+
+# Do not make a mess if another pencil-test is already running in this directory!
+my $instances_running = `ps aux | grep -v "grep" | grep "perl" | grep "$0" | wc -l`;
+$instances_running =~ s/\s+$//s;
+if ($instances_running > 1) { die ("ERROR: another 'pencil-test' is already running here!\n"); }
+
+# Immediate flushing after "\n"
+$| = 1;
+
+print_header();
+
+## Run test(s)
+my $first = 1;
+if ($local) {
+    run_tests_on(`hostname`);
+} else {
+    foreach my $host (@ARGV) {
+        run_tests_on($host)
+    }
+}
+
+print_footer();
+
+# ====================================================================== #
+
+sub run_tests_on {
+# Run auto tests remotely (unless $local is true) on the given host
+    my ($host) = @_;
+    chomp $host;
+
+    print STDERR "run_test_on($host)" if ($debug);
+
+    my ($shost) = ($host =~ /([^.]*)/); # host name sans domain
+    $shost = "\u$shost";
+
+    if ($html) {
+        unless ($first) { print "<p>\n<hr>\n<p>\n" };
+        print "<h2>$shost:</h2>\n\n<pre>\n";
+    } else {
+        unless ($first) { print "\n\n" };
+        print "  $host:\n================\n";
+    }
+
+    ## Construct and execute remote command
+    my @cmd;
+    if ($local) {
+        @cmd = ("sh");
+    } else {
+        @cmd = ("ssh", "-x", "$host", "sh");
+    }
+    my $remcmd = build_remote_cmd();
+
+    if ($debug) { print STDERR "open2(*POUT, *PIN, \"@cmd\")\n" };
+    open2(*POUT, *PIN, "@cmd");
+    if ($debug) { print STDERR "print PIN $remcmd\n" };
+    print PIN "$remcmd\n";
+    close PIN;
+    if ($timingsfile ne '') {
+        open(TIMINGS, ">> $timingsfile")
+          or warn "Couldn't open $timingsfile for writing\n";
+    }
+    my ($line,$timings,$result,$update_error,$empty,$failures);            
+    $empty = 0;
+    $failures = 0;
+    while (defined($line=<POUT>)) {
+        # Extract timing lines
+        if ($line =~ /^#TIMING\s+(.*)/) {
+            print "<$line>\n" if ($debug);
+            print TIMINGS "$1\n";
+            next;
+        }
+
+        # Extract maintainers line
+        if ($line =~ /Maintainers of failed tests:\s*(.*?)\s*$/) {
+            parse_maintainers($1);
+        }
+
+        # Identify errors
+        if ($line =~ /^UPDATE ERROR:/) {
+            $update_error = 1;
+        }
+
+        if ($html) {
+            # Mark beginning of a test in HTML
+            if ($empty && ($line =~ /^\s*(?:[^:\/]+\/)*\/*(samples(?:\/[^:\/\s]+)+): \(\d+\/\d+\)\s*$/is)) {
+                print "</pre>\n".'<a name="'.$1.'"></a>'."\n<pre>";
+            }
+            if ($empty && ($line =~ /^\s*(?:All .*? tests? succeeded\.|\#*\s*auto-test failed\s*\#*)\s*$/is)) {
+                print "</pre>\n".'<a name="summary"></a>'."\n<pre>";
+            }
+            $empty = 0;
+            if ($line =~ /^[\s\-]*$/s) { $empty = 1; }
+
+            # Links on failures summary in HTML
+            if ($failures != 0) { 
+                if ($failures < 0) {
+                    print "</pre>\n<ul>\n";
+                    $failures = -$failures;
+                }
+                if ($line =~ /^\s*(?:[^:\/]+\/)*\/*(samples(?:\/[^:\/\s]+)+) \([^\(\)]+\)\s*$/is) {
+                    print '<li><a href="#'.$1.'"><code>';
+                    $result .= $line;
+                    $line =~ s/^\s+//s;
+                    $line =~ s/\s+$//s;
+                    $line =~ s/(\s\([^\(\)]+\))$/<\/code><\/a> <code>$1<\/code><\/li>/s;
+                    print $line."\n";
+                    $failures--;
+                    if ($failures <= 0) { print "</ul>\n<pre>"; }  
+                    next;
+                }
+                else {
+                    $failures = 0;
+                    print "</ul>\n<pre>";
+                }
+            }
+            if ($line =~ /^\s*Failed (\d+) test\(s\) out of \d+:\s*$/is) {
+                $failures = -$1;
+            }
+        }
+
+        # Print all other lines
+        print $line;
+        $result .= $line;
+    }
+    close POUT;
+    if ($timingsfile ne '') {
+        close TIMINGS;
+    }
+
+    # Create a stable tag if auto-test was successful
+    tag_stable_on_success($result,$host) if ($tag_stable);
+
+    # Send emails if necessary
+    notify_on_error($result,$shost,$update_error);
+
+   $first = 0;
+}
+# ---------------------------------------------------------------------- #
+sub build_remote_cmd {
+# Construct the command to send to the remote host
+
+    my $remcmd = "cd $pencil_home; ";
+    if ($update) {
+        $remcmd .= ''
+          . 'if [ -e .git ]; then'  # .git can be a directory or a file
+          . '    (git stash -q -u || echo "UPDATE ERROR: git stash");'
+          . '    (git fetch -q || echo "UPDATE ERROR: git fetch");'
+          # . '    (git reset -q --hard @{u} || echo "UPDATE ERROR: git reset");'
+          . '    (git pull --rebase -q || echo "UPDATE ERROR: git pull");'
+          . '    printf "Updated to git revision %s\n" $(git rev-parse HEAD);'
+          . 'elif [ -d .svn ]; then'
+          . '    (svn -q update || echo "UPDATE ERROR: svn update failed");'
+          . 'else'
+          . '    echo "UPDATE ERROR: Neither git nor svn checkout";'
+          . '    false;'
+          . 'fi;'
+    }
+    if ($use_build) {
+        $remcmd .= "env PENCIL_HOME=$pencil_home ./bin/pc_auto-test ";
+    } else {
+        $remcmd .= "env PENCIL_HOME=$pencil_home ./bin/auto-test ";
+    }
+    $remcmd .= "--time ";
+    if ($emails)             { $remcmd .= "--list-maintainers "; }
+    if ($with_xml)           { $remcmd .= "--xml " };
+    if ($clean)              { $remcmd .= "--clean " };
+    if ($reload)             { $remcmd .= "--reload " };
+    if ($short)              { $remcmd .= "--short " };
+    if ($nice)               { $remcmd .= "--nice=$nice " };
+    if ($infofile ne '')     { $remcmd .= "--infofile=$infofile " };
+    if ($postproc)           { $remcmd .= "--postproc=\"$postproc\" " };
+    if ($script_tests ne '') { $remcmd .= "--script-tests=\"$script_tests\" " };
+    if ($time_limit ne '')   { $remcmd .= "--time-limit=\"$time_limit\" " };
+    if ($timingsfile ne '')  { $remcmd .= "--summarize-times " };
+    if (@auto_test_options)  { $remcmd .= "@auto_test_options; "};
+
+    return $remcmd;
+}
+# ---------------------------------------------------------------------- #
+sub print_header {
+
+    my $date = scalar localtime();
+    my $xml = "";
+    my $testname = "Pencil Code auto-test";
+
+    $testname = $1." - ".$testname if ($commandline =~ /--pencil-home='[^\s]+?([^\/]+)'/is);
+
+    if ($with_xml) {
+        $xml=<<"END_XMLHEAD";
+<?xml version="1.0" encoding="utf-8"?>
+<pc_penciltest version="0.1" xmlns:media="http://www.nordita.dk/software/pencil-code/penciltest">
+<timestamp type="start">$date</timestamp>
+END_XMLHEAD
+    }
+    if ($html) {
+        print <<"END_HEAD";
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en">
+<head>
+        <meta name="language" content="en">
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8" >
+        <title>$testname</title>
+</head>
+<body>
+
+<p>$date</p>
+<pre>$commandline</pre>
+END_HEAD
+    } else {
+        print "$date\n\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub print_footer {
+
+    my $date = scalar localtime();
+    if ($html) {
+        print <<"END_FOOT";
+</pre>
+$date
+</body>
+</html>
+END_FOOT
+    }
+    if ($with_xml) {
+        $xml.=<<"END_XMLFOOT";
+<timestamp type="end">$date</timestamp>
+</pc_penciltest>
+END_XMLFOOT
+    }
+}
+# ---------------------------------------------------------------------- #
+sub usage {
+# Extract description and usage information from this file's header.
+    my $thisfile = __FILE__;
+    local $/ = '';              # Read paragraphs
+    open(FILE, "<$thisfile") or die "Cannot open $thisfile\n";
+    while (<FILE>) {
+        next unless /^\s*#\s*Usage:/m; # Paragraph _must_ contain 'Usage:'
+        # Drop 'Author:', etc:
+        s/.*?\n(\s*\#\s*(Description|Usage):\s*\n.*)/$1/s;
+        # Don't print comment sign:
+        s/^\s*\# ?//mg;
+        last;
+    }
+    $_;
+}
+# ---------------------------------------------------------------------- #
+sub tag_stable_on_success {
+## Create a stable tag if auto-test was successful
+    my $result = (shift || '');
+    my $host   = (shift || '');
+    my $date = strftime ("%Y-%m-%d", localtime);
+    my $svncmd;
+
+    return if ($result =~ /^Failed ([0-9]+) test/m);
+
+    $svncmd=        "ssh -x -n $host 'cd \$PENCIL_HOME;";
+    $svncmd=$svncmd."svn copy ^/trunk ^/tags/stable_".$date." -m \"automatic validation completed: auto-test on $host\" > /dev/null";
+    $svncmd=$svncmd."'";
+    system($svncmd);
+}
+# ---------------------------------------------------------------------- #
+sub notify_on_error {
+## Check for errors and send emails
+    my ($result, $host, $update_error) = @_;
+
+    my $failed_marker = '### auto-test failed ###'; # only in version of
+                                                    # auto-test later than
+                                                    # 27-Feb-2006
+
+    return SUCCESS unless ($emails or $update_error);  # nobody to report to
+
+    my $failed = ($result =~ /^### auto-test failed ###$/m);
+    print STDERR "\$failed (1) = <$failed>\n" if ($debug);
+    my $nerrors = 0;
+    if ($result =~ /^Failed ([0-9]+) test/m) { # get number of failed tests
+        $failed = 1;
+        $nerrors = $1;
+    }
+    if ($debug) {
+        print STDERR "Update error\n" if $update_error;
+        print STDERR "\$failed (2) = <$failed>\n";
+        print STDERR "\$nerrors    = <$nerrors>\n";
+        print STDERR "\$result     = <$result>\n";
+    }
+
+    return SUCCESS unless ($failed or $update_error); # nothing to report
+
+    # Analyze
+    parse_emails($emails);      # ..so we can filter out individual tests
+    my ($main,$summary)
+      = split(/^----*\s*\n(?:$failed_marker\s*\n)?(?=Failed)/m,$result);
+    if (defined($summary)) {
+        # Extract list of failed directories
+        my @failures = split(/\n/,$summary);
+        ($nerrors) = ($failures[0] =~ /Failed ([0-9]+) test/);
+        @failures = grep /^\s*\S+\s\(.*\)\s*$/, @failures;
+        @failures = map { $_ =~ s/^\s*(\S*).*/$1/; $_ } @failures;
+        foreach my $address (keys %emails) {
+            foreach my $fail (@failures) {
+                my $def_matches = ! any_match($fail,$neg{''});
+                my $pos_matches = any_match($fail,$pos{$address});
+                my $neg_matches = any_match($fail,$neg{$address});
+                if (($def_matches || $pos_matches) && ! $neg_matches) {
+                    if ($debug) {
+                        print STDERR "...", substr($fail,-35,35),
+                          ": \$sendmailto{$address}++\n";
+                    }
+                    $sendmailto{$address}++;
+                }
+            }
+        }
+    } elsif ($update_error) {
+        warn "[Couldn't update code]\n";
+        $summary = 'Failed to update the code';
+        $nerrors = '';
+        %sendmailto = %emails;  # Report this to everybody
+    } else {
+        warn "[No individual failing tests to report]\n";
+        $summary = '';
+        $nerrors = '';
+        %sendmailto = %emails;  # Report this (probably another auto-test
+                                # running) to everybody
+    }
+
+    # Send mail
+    foreach my $address (keys %sendmailto) {
+        send_mail($address,$mailer,$host,$nerrors,$blurb,$summary,$main);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub write_timings {
+## Append timing results to file
+    my ($timings, $file) = @_;
+
+    if (defined $timings) {
+        print TIMINGS $timings;
+        close(TIMINGS);
+    }
+}
+
+# ---------------------------------------------------------------------- #
+sub parse_emails {
+# Parse the email list into hashes
+    my $emaillist = shift;
+
+    my ($entry,$address,$spec);
+    print STDERR "Checking who to alert by email\n" if ($debug);
+    while ($emaillist) {
+        $emaillist =~ /^([^\}\{,]*(?:\{[^\}]*\})?),?(.*)/
+          or warn "Cannot parse email list <$emaillist>\n";
+        ($entry,$emaillist) = ($1,$2);
+        ($address,$spec) = ($entry =~ /([^\}\{]*)\{?([^\}]*)\}?/);
+        $emails{$address}++ if ($address =~ /\S/);
+        foreach my $sp (split(/,/,$spec)) {
+            if ($sp =~ /^\-:(.*)/) {
+                push @{$neg{$address}}, $1
+#               push @{$neg{$1}}, $address;
+            } elsif ($sp =~ /^\+:(.*)/) {
+                push @{$pos{$address}}, $1
+#               push @{$pos{$1}}, $address;
+            } else {
+                warn "Strange specification: <$spec>\n";
+            }
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub parse_maintainers {
+# Parse the email list into hashes
+    my ($maintainers) = @_;
+
+    print STDERR "Maintainers of failed test: $maintainers\n" if ($debug);
+
+    foreach my $address (split(/\s*,\s*/, $maintainers)) {
+        $address = deobfuscate($address);
+        $emails{$address}++ if ($address =~ /\S/);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub any_match {
+# Match a string against a list of patterns
+    my $string = shift;
+    my $pattern_pointer = shift;
+    my @patterns = ();
+
+    if (ref($pattern_pointer) eq 'ARRAY') {
+        @patterns = @{$pattern_pointer}
+    };
+
+    foreach my $patt (@patterns) {
+        if ($string =~ /$patt$/) { return 1; }
+    }
+    return 0;
+}
+# ---------------------------------------------------------------------- #
+sub send_mail {
+# Send an email to the given address
+    my $address = shift;
+    my $mailer  = shift;
+    my $host    = shift;
+    my $nerrors = shift;
+    my @text    = grep /./, @_;
+
+    if (! $mailer) {
+        if (in_PATH("sendmail")) {
+            $mailer = "sendmail";
+        } elsif (in_PATH("mailx")) {
+            $mailer = "mailx";
+        } else {
+            $mailer = "mail";
+        }
+    }
+
+    print STDERR "\$mailer = $mailer\n" if ($debug);
+
+    my $errmsg;
+    if ($nerrors =~ /[0-9]+/) { # number of failing individual tests
+        my $plurals = ($nerrors<=1 ? '' : 's');
+        $errmsg = "$nerrors error$plurals";
+    } else {                    # most likely: lockfile exists
+        $errmsg = "There are errors";
+    }
+
+    my $subject = "$errmsg from pencil-code autotest on $host";
+
+    # Add Reply-To: field if we have enough information
+    my $reply_to = undef;
+    my $mail = my $email = $ENV{EMAIL};
+    if (defined($email)) {
+        $email = deobfuscate($email);
+        if ($email =~ /<([^>]*)>/) {
+            $mail = $1;
+        } else {
+            $mail = $email;
+        }
+        if ($mail =~ /[-.a-zA-Z_0-9]+\@[-.a-zA-Z_0-9]+/) {
+            $reply_to = $email;
+        }
+    }
+
+    my $sep = "\n" . "-" x 70 . "\n\n";
+    my $body = join($sep, @text);
+
+    send_mail_dispatch($mailer, $address, $subject, $reply_to, $body);
+}
+# --------------------------------------------------------------------- #
+sub send_mail_dispatch {
+# Send email with a mailer that understands mail/mailx conventions
+# ('mailx -s Subject reci@pi.ent')
+    my ($mailer, @rest) = @_;
+
+    my %dispatch_table = (
+                          'sendmail'      => \&send_mail_sendmail,
+                          'mailx'         => \&send_mail_mailx,
+                          'mail'          => \&send_mail_mailx,
+                          'debug'         => \&send_mail_debug,
+                          'debug-to-file' => \&send_mail_debug_files,
+                     );
+    my $mailer_name = $mailer;
+    $mailer_name =~ s{.*/}{};
+    my $method = $dispatch_table{$mailer_name};
+    if (defined($method)) {
+        &$method($mailer, @rest);
+    } else {
+        warn "ERROR: No such mailer: $mailer\n";
+    }
+
+    if ($debug) {
+        &send_mail_debug('debug', @rest);
+    }
+
+}
+
+# --------------------------------------------------------------------- #
+sub send_mail_mailx {
+# Send email with a mailer that understands mail/mailx conventions
+# ('mailx -s Subject reci@pi.ent')
+    my ($mailer, $address, $subject, $reply_to, $body) = @_;
+
+    my @cmdline = ($mailer);
+    push @cmdline, '-s', $subject;
+    push @cmdline, "$address";
+
+    if ($debug) { print STDERR "\@cmdline = @cmdline\n" };
+    open (MAILER, '|-', @cmdline);
+    print MAILER $body;
+    print MAILER "\n";
+    close MAILER;
+}
+# --------------------------------------------------------------------- #
+sub send_mail_sendmail {
+# Send email with sendmail
+    my ($mailer, $address, $subject, $reply_to, $body) = @_;
+
+    my @cmdline = ($mailer, '-oi', '-t');
+
+    if ($debug) { print STDERR "\@cmdline = @cmdline\n" };
+    open (MAILER, '|-', @cmdline);
+    print MAILER "To: $address\n";
+    print MAILER "Subject: $subject\n";
+    print MAILER "Reply-to: $reply_to\n" if defined($reply_to);
+    print MAILER "\n\n";      # header--body separator
+    print MAILER "$body\n";
+    close MAILER;
+}
+# --------------------------------------------------------------------- #
+sub send_mail_debug {
+# Don't send email -- just tell us what would be sent, in a format
+# inspired by sendmail
+    my ($mailer, $address, $subject, $reply_to, $body) = @_;
+
+    print STDERR "email: To: $address\n";
+    print STDERR "email: Subject: $subject\n";
+    if (defined($reply_to)) {
+        print STDERR "email: Reply-to: $reply_to\n";
+    } else {
+        print STDERR "email: <No Reply-to: field>\n";
+    }
+    print STDERR "email: \n";
+    print STDERR "email: \n";
+    print STDERR "email: $body\n";
+}
+# --------------------------------------------------------------------- #
+sub send_mail_debug_files {
+# Don't send email -- just tell us what would be sent, in a format
+# inspired by sendmail
+    my ($mailer, $address, $subject, $reply_to, $body) = @_;
+
+    my $file = "debug_$address";
+    open(my $fh, "> $file") or die "Cannot open file $file: $!\n";
+    print $fh "email: To: $address\n";
+    print $fh "email: Subject: $subject\n";
+    if (defined($reply_to)) {
+        print $fh "email: Reply-to: $reply_to\n";
+    } else {
+        print $fh "email: <No Reply-to: field>\n";
+    }
+    print $fh "email: \n";
+    print $fh "email: \n";
+    print $fh "email: $body\n";
+}
+# ---------------------------------------------------------------------- #
+sub deobfuscate {
+# Return obfuscated email to mailer-compliant form
+    my ($address) = @_;
+
+    $address =~ s{/|\[at\]|@}{@};
+    $address =~ s{:|\[dot\]|\.}{.}g;
+
+    return $address;
+}
+# --------------------------------------------------------------------- #
+sub in_PATH {
+# Check whether an executable is available in the execution PATH
+    my $file = shift;
+    my $path;
+    foreach $path (split(/:/,$ENV{PATH})) {
+        if (-x "$path/$file") { return 1; }
+    }
+    return 0;
+}
+# ---------------------------------------------------------------------- #
+
+# End of file pencil-test

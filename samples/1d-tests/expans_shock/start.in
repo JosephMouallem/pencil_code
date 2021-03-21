@@ -1,0 +1,21 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$'
+  xyz0  =-750., 0.0, 0.0,      ! first corner of box
+  xyz1  = 50., 1.0, 1.0,      ! box size
+  lperi = F , T , T,          ! periodic direction?
+/
+&eos_init_pars
+/
+&hydro_init_pars
+  inituu='xjump', uu_left=-3., uu_right=-2.46537, widthuu=1.
+/
+&density_init_pars
+  initlnrho='xjump', rho_left=1., rho_right=.87469, widthlnrho=1.
+/
+&entropy_init_pars
+  initss='xjump', ss_left=1.68805, ss_right=1.68805, widthss=1.
+/

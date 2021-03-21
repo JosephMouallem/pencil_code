@@ -1,0 +1,40 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Run parameters!
+!
+&run_pars
+  cvsid='$Id$',
+  nt=100, it1=5, isave=100, itorder=3, 
+  dsnap=1.0
+  cdt=0.4,
+  cdtv=0.3, 
+  dtmin=1e-6,
+!  
+  lpencil_check=T
+!
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+  lupw_rho=T
+/
+&magnetic_run_pars
+  eta=1e-3
+/
+&neutralvelocity_run_pars 
+  iviscn='nun-const'
+  nun=1e-4
+  csn0=1.
+  lpressuregradient=T
+  lelectron_pressure=T
+  electron_pressure=1
+/
+&neutraldensity_run_pars  
+  lupw_rhon=T
+/
+&viscosity_run_pars
+  ivisc='nu-const'
+  nu=1e-4
+/

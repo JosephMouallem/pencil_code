@@ -1,0 +1,33 @@
+#!/bin/csh
+# CVS: $Id$
+
+# Name:   own-risk
+# Author: wd (Wolfgang.Dobler@kis.uni-freiburg.de)
+# Date:   19-Jul-2002
+# Description:d
+#   Map [pencil_modular/runs, pencil_modular, pencil_modular_runs]
+#   to  [pencil_modular_run,  pencil-code],   pencil-runs        ]
+#   in all CVS/Repository files below the current directory. This is to
+#   follow the new naming scheme without removing and checking in anew.
+
+# Use at your own risk (one backup copy is made, though).
+
+# The following was GNU-find specific:
+# find . -path '*/CVS/Repository' \
+#  -exec perl -i.bak -pe \
+#    's{pencil_modular/runs}{pencil-runs}; \
+#     s{pencil_modular_runs($|/)}{pencil-runs$1}; \
+#     s{pencil_modular($|/)}{pencil-code$1}' {} \;
+
+# Far less elegant (and bound to not work on huge trees), but needed for
+# OSF1:
+set reps = `find . -type d -name CVS`
+foreach d ($reps)
+  perl -i.bak -pe \
+    's{pencil_modular/runs}{pencil-runs}; \
+     s{pencil_modular_runs($|/)}{pencil-runs$1}; \
+     s{pencil_modular($|/)}{pencil-code$1}' $d/Repository
+end
+
+
+# End of file own-risc

@@ -1,0 +1,26 @@
+!                               -*-f90-*-   (for emacs)
+!
+! Oscillations of an entropy bubble in an isothermal atmosphere
+! Run parameters
+!
+&run_pars
+  cvsid='$Id$',
+  nt=50, it1=10, isave=10000, itorder=3,
+  dsnap=1.,
+  lpencil_check_small=F  ! test of the requested pencils
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+  lupw_lnrho=T     ! use upwinding for lnrho to avoid wiggles
+/
+&grav_run_pars
+/
+&entropy_run_pars
+  lupw_ss=T        ! use upwinding for entropy to avoid wiggles
+/
+&viscosity_run_pars
+  ivisc='nu-const', nu=1e-3
+/

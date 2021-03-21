@@ -1,0 +1,55 @@
+#!/bin/csh
+
+# Name:   remote-top
+# Author: wd+ab
+# Date:    7-Oct-2002
+# $Id$
+# Description:
+#     does top -bn1 on all procs of nodelist, write to datadir
+
+set debug = 0
+unsetenv DISPLAY
+
+# Unpack NODELIST to csh array
+set nodelist = `echo "$NODELIST" | sed 's/:/ /g'`
+
+# Check for existence of `top' command:
+set node = $nodelist[1]
+set top_cmd = 'env TERM=dumb top -bn1 2>&1 > /dev/null; echo $?'
+set top_stat = `$SSH $node "sh -c '$top_cmd'"`
+if ("$top_stat" != "0") then         # return status should be 0
+  echo "remote-top: Can't find top command on $node"
+  echo "Command was: <$SSH $node "'"'"sh -c '$top_cmd'"'">'
+  echo "Reply was: <$top_stat>"
+  echo "Exiting"
+  exit 1
+endif
+
+if ($#argv > 0) then
+  if (($1 == "-v") || ($1 == "--verbose")) then
+    set debug = 1
+    shift
+  endif
+endif
+
+set targetdir = $PENCIL_WORKDIR/data
+
+if ($debug) then
+  echo "targetdir = $targetdir"
+  echo "nodelist = $nodelist"
+endif
+
+date
+while (1)
+  set i=0
+  foreach node ($nodelist)
+    if ($debug) echo "node=$node; targetdir=$targetdir"
+    $SSH $node "sh -c 'env TERM=dumb top -bn1 > $targetdir/proc$i/top.log'"
+    set i = `expr $i + 1`
+    echo 'i=' $i
+  end
+  sleep 60
+
+end
+
+# End of file

@@ -1,0 +1,17 @@
+Directory:
+    ${PENCIL_HOME}/samples/star-in-a-box_MHS
+SVN Id:
+    $Id$
+Maintainer:
+    Vincent Duez <vduez@astro.uni-bonn.de>
+Added:
+    29-Jul-2010 (started this directory)
+Status:
+    Under preparation
+Recommended resolution:
+    TBD
+Comments:
+    Setup used for initializing non-force-free magnetic equilibria in star-in-a-box simulations
+    In the present setup, strong stratification is used.
+References:
+    To be added

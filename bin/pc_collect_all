@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# $Id$  
+# Script to automatically collect distributed VARN files into
+# one single file that will be stored in data/allprocs.
+#  
+
+SCRIPTNAME="pc_collect"
+
+DATADIR="data"
+PROCDIR="$DATADIR/proc0"
+ALLPROCS="$DATADIR/allprocs"
+SCRIPT="src/pre_and_post_processing/$SCRIPTNAME.x"
+
+if [ ! -e "$SCRIPT" ]; then
+	echo "Please compile first by executing \"pc_build\"."
+	exit 1
+fi
+
+for ENTRY in `find "$PROCDIR" -name VAR[0-9]* | sort`
+do
+	FILE=`basename "$ENTRY"`
+	if [ ! -e "$ALLPROCS/$FILE" ]; then
+		echo "collecting $FILE"
+		echo "$FILE" | $1 $SCRIPT
+	fi
+done
+
+for FILE in `echo "var.dat crash.dat"`
+do
+	if [ -e "$PROCDIR/$FILE" ]; then
+		if [ ! -e "$ALLPROCS/$FILE" ]; then
+			echo "collecting $FILE"
+			echo "$FILE" | $1 $SCRIPT
+		fi
+	fi
+done

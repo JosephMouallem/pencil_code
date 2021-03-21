@@ -1,0 +1,1555 @@
+#!/bin/sh
+#  -*-Perl-*-  (for Emacs)    vim:set filetype=perl:  (for vim)
+#======================================================================#
+# Work in submit directory (SGE):
+#$ -cwd -V
+#======================================================================#
+# Run the right perl version:
+if [ -x /usr/local/bin/perl ]; then
+  perl=/usr/local/bin/perl
+elif [ -x /usr/bin/perl ]; then
+  perl=/usr/bin/perl
+else
+  perl=`which perl| sed 's/.*aliased to *//'`
+fi
+
+exec $perl -x -S $0 "$@"     # -x: start from the following line
+#======================================================================#
+#! /Good_Path/perl -w
+# line 20
+
+# Name:   pc_build
+# Author: wd (wdobler [at] gmail [dot] com)
+# Date:   24-Jul-2009
+# Description:
+#   Run the Pencil Code, using settings from the 'runtime' section in
+#   the appropriate configuration files.
+# Usage:
+#   pc_run [-v|-h]
+#   pc_run [start|run]
+#   pc_run [stop|reload]
+# Options:
+#   -h, --help      This help.
+#   -f <files>,
+#       --config-files=<files>
+#                   Use the given <files> (a comma-separated list) as
+#                   configuration files, rather than trying to find a
+#                   config file based on a host ID.
+#                   If the file name starts with '/' or with './', the
+#                   file name will be treated as absolute (/) or relative
+#                   to the current working directory (./).
+#                   Otherwise, search the standard configuration path
+#                   (something like
+#                     ./config
+#                     $PENCIL_HOME/config-local
+#                     $HOME/.pencil/config
+#                     $PENCIL_HOME/config
+#                     $PENCIL_HOME/config/compilers
+#                     $PENCIL_HOME/config/compilers/extensions
+#                   )
+#                   The suffix '.conf' may be omitted.
+#   -H <id>
+#       --host-id=<id>
+#                   Use the given <id> as host ID.
+#       --notify    Tell us (audibly and visually) when the run is done.
+#   -N, --no-pencil-check
+#                   Suppress pencil consistency check, irrespective of
+#                   &run_pars.lpencil_check.
+#   -q, --quiet     Be quiet.
+#   -v, --version   Print version number.
+#       --last      Return the dates+paths of the last runs by 'tailing'
+#                   the $PENCIL_HOME/.run_directories.log file.
+# Examples:
+#   pc_run start              # just start
+#   pc_run run                # just run
+#   pc_run                    # start if necessary, then run
+#   pc_run start run run run  # start, then run 3 times
+#   pc_run start run^3        # ditto
+#   pc_run ^3                 # start if necessary, then run 3 times
+#
+#   pc_run stop               # stop pencil job running in current directory
+#   pc_run reload             # make running pencil job reload run.in
+
+# To do:
+# - NEWDIR handling
+# - RERUN handling
+# - $booted_mpd handling
+# - Ensure $ENV{SCRATCH_DIR} is defined if $local_disc or $local_binary is set
+# - $resub, $resubop, $run_resub
+# Improvements:
+# - Use a wrapper to die() that removes the LOCK file (except when die'ing
+#   because of an existing lock file).
+# - Extract common code for finding and parsing config file from here
+#   and pc_run and put it into Pencil::ConfigFinder (or some 3rd module,
+#   or Pencil::Util).
+
+# Copyright (C) 2009-2017 The Pencil Code Team
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the same conditions as Perl or under the GNU General Public
+# License, version 3 or later.
+
+use strict;
+BEGIN {
+    # Make sure ${PENCIL_HOME}/lib/perl is in the Perl path
+    if (-d "$ENV{PENCIL_HOME}/lib/perl") {
+        unshift @INC, "$ENV{PENCIL_HOME}/lib/perl";
+    } else {
+        if ($0 =~ m{( .* [/\\] )}x) { unshift @INC, "$1../lib/perl"; }
+    }
+}
+
+use Pencil::Util;
+Pencil::Util::use_pencil_perl_modules(
+    'Pencil::ConfigFinder',
+    'Pencil::ConfigParser'
+    ) or die;
+
+use POSIX qw(strftime);
+use Cwd;
+use Getopt::Long;
+# Allow for '-Plp' as equivalent to '-P lp' etc:
+Getopt::Long::config("bundling");
+
+my %opts;                     # Options hash for GetOptions
+
+## Process command line
+GetOptions(\%opts,
+           qw( -h   --help
+                    --debug
+               -f=s --config-files=s
+               -H=s --host-id=s
+               -N   --no-pencil-check
+                    --notify
+               -q   --quiet
+               -v   --version
+                    --last)
+          ) or die "Aborting.\n";
+
+my $debug = ($opts{'debug'} ? 1 : 0 ); # undocumented debug option
+if ($debug) {
+    printopts(\%opts);
+    print "\@ARGV = '@ARGV'\n";
+}
+
+my $cmdname = (split('/', $0))[-1];
+
+if ($opts{'h'} || $opts{'help'})    { die usage();   }
+if ($opts{'v'} || $opts{'version'}) { die version(); }
+if ($opts{'last'}) { die get_last(); }
+
+my $config_files   = ($opts{'f'} || $opts{'config-files'}    || undef);
+my $host_id        = ($opts{'H'} || $opts{'host-id'}         || undef);
+my $suppress_check = ($opts{'N'} || $opts{'no-pencil-check'} || '');
+my $notify         = (              $opts{'notify'}          || '');
+my $quiet          = ($opts{'q'} || $opts{'quiet'}           || '');
+
+my @config_files;
+if (defined $config_files) {
+    my @files = split(/[,\s\+]+/s, $config_files);
+    @config_files = Pencil::ConfigFinder::locate_config_files(@files) ;
+} else {
+    mention($Pencil::ConfigFinder::debug);
+    $Pencil::ConfigFinder::debug = 1 if ($debug);
+    my $config_file;
+    if (defined $host_id) {
+        $config_file = Pencil::ConfigFinder::find_config_file_for_host($host_id);
+    } else {
+        $config_file = Pencil::ConfigFinder::find_config_file()
+    }
+    die "Fatal: Couldn't find config file.\n" unless (defined $config_file);
+    push @config_files, $config_file;
+    print STDERR "Found config file <$config_files[0]>\n" unless ($quiet);
+}
+
+die "No configuration file found\n" unless @config_files;
+my $parser = new Pencil::ConfigParser(@config_files);
+$parser->debug(1) if ($debug);
+
+my %runtime_params = %{$parser->get_runtime_params()};
+my @environment_args = @{$parser->get_environment_args()};
+
+
+## Global variables
+my $data_dir = './data';
+my $runtime_dir = './runtime';
+my $lockfile = './LOCK';
+my $errorfile = './ERROR';
+my $completedfile = './COMPLETED';
+my $noerasefile = './NOERASE';
+my $rerunfile = './RERUN';
+my $newdirfile = './NEWDIR';
+my $copy_snapshots = 'copy-snapshots';
+my $copy_snapshots_log = './copy-snapshots.log';
+my $start_x = './src/start.x';
+my $run_x   = './src/run.x';
+
+my $locked = 0;
+my $booted_lam = 0;
+my $booted_mpd = 0;
+
+## Variables
+# ..extracted from config:
+my $local_disc          = $runtime_params{'local_disc'         } || 0;
+my $one_local_disc      = $runtime_params{'one_local_disc'     } || 0;
+my $scratch_dir         = $runtime_params{'scratch_dir'        } || '/scratch';
+my $local_binary        = $runtime_params{'local_binary'       } || 0;
+my $remote_top          = $runtime_params{'remote_top'         } || 0;
+my $master_node         = $runtime_params{'master_node'        } || undef;
+my $remove_scratch_root = $runtime_params{'remove_scratch_root'} || 0;
+my $nonserial_procN     = $runtime_params{'nonserial_procN'    } || 0;
+my $n_procs_per_node    = $runtime_params{'n_procs_per_node'   } || 1;
+
+# ..extracted dynamically from executables and .in files:
+my %settings = local_settings();
+my $Ncpus            = get_setting(\%settings, 'ncpus'           );
+my $mpi              = get_setting(\%settings, 'mpi'             );
+my $lparticles       = get_setting(\%settings, 'lparticles'      );
+my $lpointmasses     = get_setting(\%settings, 'lpointmasses'    );
+my $hostname         = get_setting(\%settings, 'hostname'        );
+my $yinyang          = get_setting(\%settings, 'lyinyang'        );
+if ($yinyang) {
+  $Ncpus = 2 * $Ncpus;
+  print "YIN-YANG GRID run", "\n";
+}
+
+## Environment variables for other processes we start
+# Set up PATH for users who don't include $PENCIL_HOME/bin by default
+$ENV{PATH} = "$ENV{PATH}:$ENV{PENCIL_HOME}/bin" if defined $ENV{PENCIL_HOME};
+
+# Propagate current pid to copy-snapshots
+$ENV{PARENT_PID } = $$;
+
+# Make scratch_dir unique, so different
+# jobs running simultaneously will not interfere with each other.
+my $scratch_suffix = defined $ENV{JOB_ID} ? $ENV{JOB_ID} : $ENV{PARENT_PID};
+$scratch_dir = $scratch_dir . "/pencil-$scratch_suffix";
+# Propagate to copy-snapshots
+$ENV{SCRATCH_DIR} = $scratch_dir;
+
+$ENV{SSH        } = 'ssh';
+$ENV{SCP        } = 'scp';
+$ENV{NODELIST   } = join ':', get_node_list($Ncpus); # may be modfied by mpi_run_cmd
+
+my @subcmds = expand_cmd_sequence(@ARGV);
+print STDERR "Commands: <", join(">, <", @subcmds), ">\n" if ($debug);
+
+
+## Start working
+update_runtime_dir();
+
+if ($suppress_check) {
+    write_to_file("$runtime_dir/NO-PENCIL-CHECK");
+}
+
+## Setup steps:
+
+# - lock
+# - read $data_dir value from file, if present
+# - catch C-c to perform ordered shutdown (in particular running our END
+#   block)
+
+# Save working directory for other scripts we call
+cd_to_wordir();
+$ENV{PENCIL_WORKDIR} = getcwd();
+
+while (my $subcmd  = shift @subcmds) {
+    dispatch_subcommand($subcmd);
+}
+
+# ---------------------------------------------------------------------- #
+sub dispatch_subcommand {
+    my ($subcmd) = @_;
+
+    my %dispatch_table = (
+        start  => \&start_cmd,
+        run    => \&run_cmd,
+        stop   => \&stop_cmd,
+        reload => \&reload_cmd,
+        );
+
+    my $action = $dispatch_table{$subcmd};
+    if (defined($action)) {
+        print STDERR "Subcommand: $subcmd\n" unless ($quiet);
+        &$action();
+        handle_rerun($subcmd);
+        handle_newdir($subcmd);
+    } else {
+        warn "No such subcommand: <$subcmd>\n\n";
+        die usage();
+    }
+}
+# ---------------------------------------------------------------------- #
+sub start_cmd {
+# Run start.x
+
+    honour_nostart();
+    setup_datadir();
+    run_extra_setup_script();
+    setup_local_disc();
+    handle_local_binary($start_x);
+    identify_revision($start_x);
+
+    get_lock();
+    clear_completed();
+    mpi_run_cmd($start_x);
+    clear_lock();
+
+    handle_copy_snapshots('copy-snapshots-start.log');
+}
+# ---------------------------------------------------------------------- #
+sub run_cmd {
+# Run run.x
+
+    setup_local_disc();
+    handle_local_binary($run_x);
+    distribute_var_files();
+
+    clean_up_before_run();
+    start_background_helpers();
+    write_job_id('STARTED');
+    log_rundirectory();
+    identify_revision($run_x);
+
+    get_lock();
+    clear_completed();
+    mpi_run_cmd($run_x);
+    clear_lock();
+
+    run_system_cmd_recoverably('pc_deprecated_slice_links');
+    write_job_id('FINISHED');
+
+    handle_copy_snapshots('copy-snapshots-run.log');
+}
+# ---------------------------------------------------------------------- #
+sub mpi_run_cmd {
+# Run the given command through mpiexec (if this is an MPI run).
+# This method is only called for start.x and run.x
+    my @cmd_line = @_;
+
+    my $extra_opts   = $runtime_params{'extra_opts'  } || '';
+    my @extra_opts = split('\s+', $extra_opts);
+
+    print "", (scalar localtime()), "\n";
+
+    if ($mpi) {
+        print "Running under MPI\n" unless ($quiet);
+
+        my $mpiexec = $runtime_params{'mpiexec'};
+        if ($mpiexec) {
+            if (!`which $mpiexec`) {
+                warn "Can not find '".$mpiexec."', trying default setting...\n";
+                $mpiexec = '';
+            }
+        }
+        if (!$mpiexec) {
+            $mpiexec = 'mpiexec';
+            warn "No valid mpiexec setting. Using '".$mpiexec."' as default.\n";
+            if (!`which $mpiexec`) {
+                warn "Can not find '".$mpiexec."', switching back to older 'mpirun'.\n";
+                $mpiexec = 'mpirun';
+            }
+        }
+        my $mpiexec_opts = $runtime_params{'mpiexec_opts'} || '';
+        my $mpiexec_opts2 = $runtime_params{'mpiexec_opts2'} || '';
+
+        my ($np_opts_ref, $mpi_x_opts_ref, $n_procs_per_node)
+          = get_mpiexec_opts($mpiexec, $Ncpus, $n_procs_per_node);
+        push @extra_opts, @$mpi_x_opts_ref;
+
+        my @mpiexec_cmd_line;
+        push @mpiexec_cmd_line, split('\s+', $mpiexec);
+        push @mpiexec_cmd_line, split('\s+', $mpiexec_opts);
+        push @mpiexec_cmd_line, @$np_opts_ref;
+        push @mpiexec_cmd_line, split('\s+', $mpiexec_opts2);
+        push @mpiexec_cmd_line, @cmd_line;
+        push @mpiexec_cmd_line, @extra_opts;
+        dump_parameters(
+            $mpiexec, $mpiexec_opts, $mpiexec_opts2, $extra_opts,
+            $np_opts_ref, $mpi_x_opts_ref, $n_procs_per_node
+        ) if $debug;
+        time_system_cmd(@mpiexec_cmd_line);
+    } else {
+        $Ncpus = 1;
+        $n_procs_per_node = 1;
+        dump_parameters(undef, undef, 1, '') if $debug;
+        time_system_cmd(@cmd_line, @extra_opts);
+    }
+
+    print "\n", (scalar localtime()), "\n";
+
+    shutdown_mpi();
+}
+# ---------------------------------------------------------------------- #
+sub dump_parameters {
+# Print all(?) relevant parameters
+
+    my ($mpiexec, $mpiexec_opts, $mpiexec_opts2, $extra_opts,
+        $np_opts_ref, $mpi_x_opts_ref, $n_procs_per_node) = @_;
+
+    my $fmt = "\%-17s = <\%s>\n";
+    printf $fmt, '$mpi',                $mpi;
+    printf $fmt, '$data_dir',           $data_dir;
+    printf $fmt, '$SCRATCH_DIR',        $ENV{SCRATCH_DIR};
+    printf $fmt, '$hostname',           $hostname;
+    printf $fmt, '$extra_opts',         $extra_opts;
+    printf $fmt, '$lparticles',         $lparticles;
+    printf $fmt, '$lpointmasses',       $lpointmasses;
+
+    if ($mpi) {
+        printf $fmt, '$Ncpus',             $Ncpus;
+        printf $fmt, '$npopts',             "@{$np_opts_ref}";
+        printf $fmt, '$local_disc',         $local_disc;
+        printf $fmt, '$one_local_disc',     $one_local_disc;
+        printf $fmt, '$remote_top',         $remote_top;
+        printf $fmt, '$local_binary',       $local_binary;
+        printf $fmt, '$mpiexec',            $mpiexec;
+        printf $fmt, '$mpiexec_opts',       $mpiexec_opts;
+        printf $fmt, '$mpiexec_opts2',      $mpiexec_opts2;
+        printf $fmt, '$extra_opts',         $extra_opts; # duplicate, but handy
+        printf $fmt, '$master_node',        $master_node || '';
+        printf $fmt, '$NODELIST',           $ENV{NODELIST};
+        printf $fmt, '$SSH',                $ENV{SSH};
+        printf $fmt, '$SCP',                $ENV{SCP};
+        printf $fmt, '$PARENT_PID',         $ENV{PARENT_PID};
+        printf $fmt, '$copy_snapshots',     $copy_snapshots;
+    }
+}
+# ---------------------------------------------------------------------- #
+sub setup_local_disc {
+# Set up directories and binaries on local disc.
+
+    unless ($mpi) {
+        # sanity check
+        if ($local_disc || $local_binary) {
+            die "local_disc or local_binary make no sense without MPI\n";
+        } else {
+            # nothing to do
+            return;
+        }
+    }
+
+    if ($one_local_disc && ! $local_disc) {
+        die "one_local_disc requires local_disc\n";
+    }
+
+    # If local disc is used, write name into $data_dir/directory_snap.
+    # This will be read by the code, if the file exists.
+    # Remove file if not needed, to avoid confusion.
+    my $snapdir_file = "$data_dir/directory_snap";
+    unlink_if_exist($snapdir_file);
+    if ($local_disc) {
+        write_to_file($snapdir_file, $ENV{SCRATCH_DIR});
+    }
+
+    if ($local_binary) {
+        $start_x = "$ENV{SCRATCH_DIR}/start.x";
+        $run_x   = "$ENV{SCRATCH_DIR}/run.x;"
+    }
+
+    if ($one_local_disc) {
+        # Common scratch disc: Set nodelist to first node (or master node,
+        # if specified in the host configuration)
+        my $old_nodelist = $ENV{NODELIST};
+        $old_nodelist = "<empty>" if ($old_nodelist eq '');
+        if (defined $master_node) {
+            $ENV{NODELIST} = $master_node;
+        } else {
+            $ENV{NODELIST} =~ s/:.*//;
+        }
+        warn "Overwriting \$NODELIST\n  $old_nodelist\n  -> $ENV{NODELIST}"
+          unless $quiet;
+    }
+
+    # Create subdirectories on local scratch disc (start will also create
+    # them under $data_dir/)
+    if ($local_disc) {
+        if ($one_local_disc) {
+            print "Creating directory structure on common scratch disc\n"
+              unless $quiet;
+        } else {
+            print "Creating directory structure on local scratch disc(s)\n"
+              unless $quiet;
+        }
+        my @subdirs = subdir_list();
+        my $cmd = "if [ ! -e $ENV{SCRATCH_DIR} ]; then mkdir -p $ENV{SCRATCH_DIR}; fi;"
+          . " cd $ENV{SCRATCH_DIR}; mkdir -p @subdirs";
+        foreach my $host (split ':', $ENV{NODELIST}) {
+            system($ENV{SSH}, $host, 'sh', '-c', "'$cmd'") == 0
+              or warn "Couldn't run <$cmd> on $host via ssh\n";
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub get_mpiexec_opts {
+# From the name of the mpiexec command, determine N_cpu option and
+# possible extra options.
+#
+# Returns list of mpiexec options and number of CPUs per node (which we
+# apparently have to reset for some mpiexec variants):
+#   ( \@np_options, \@extra_options, $n_procs_per_node )
+#
+# Note: We don't currently support redefining $mpiexec for nuripm, as that
+# was really weird.
+    my ($mpiexec, $ncpus, $cpus_per_node) = @_;
+
+    my @np_opts;
+    my @extra_opts;
+    if ($mpiexec =~ /mpirun|orterun/) {
+        push @np_opts, '-np', $ncpus;
+    } elsif ($mpiexec =~ /mpiexec/) {
+        push @np_opts, '-n', $ncpus;
+    } elsif ($mpiexec =~ /mpprun/) {
+        # No options needed
+    } elsif ($mpiexec =~ /mpimon/) {
+        push @np_opts, '-stdin', 'all', '-inherit_limits';
+        push @extra_opts, '--';
+    } elsif ($mpiexec =~ /scout/) {
+        my $nodes = $ENV{NSLOTS} - 1;
+        $cpus_per_node = $ncpus / $nodes;
+        push @np_opts, "-nodes=${nodes}x${cpus_per_node}";
+    } elsif ($mpiexec =~ /poe/) {
+        $cpus_per_node = 1;
+        push @extra_opts, '-procs', $ncpus;
+    } elsif ($mpiexec =~ /yod/) {
+        # $mpiexec = 'yod';       # necessary??
+        push @np_opts, '-sz', $ncpus;
+    } elsif ($mpiexec =~ /nuripm/) {
+        # $mpiexec = 'mpirun';    # pretty weird...
+    } elsif ($mpiexec =~ /aprun/) {
+        # $mpiexec = 'aprun';     # special command used by Kraken system of XSEDE
+        push @np_opts, '-n', $ncpus;
+    } elsif ($mpiexec =~ /srun/) {
+        push @np_opts, '-n', $ncpus;
+    } elsif ($mpiexec =~ /ibrun/) {
+        # No option is needed.
+    } else {
+        warn "pc_run: No clue how to tell $mpiexec to use $ncpus nodes\n";
+    }
+
+    return (\@np_opts, \@extra_opts, $cpus_per_node);
+}
+# ---------------------------------------------------------------------- #
+sub distribute_var_files {
+# Copy var.dat files over to each processor's local scratch area if needed
+
+    # Get list of relevant directories under data/
+    my @subdirs = (<$data_dir/proc*>, <$data_dir/allprocs>);
+    @subdirs = map { s{^$data_dir/*}{}; $_ } @subdirs;
+
+    if ($local_disc) {
+        if ($one_local_disc) {
+            foreach my $node (split ':', $ENV{NODELIST}) {
+                foreach my $dir (@subdirs) {
+                    scp_local_files($dir, $node);
+                }
+            }
+        } else {         # one local disc per MPI process (e.g. Horseshoe)
+            my $i_node = -1;
+            foreach my $node (split ':', $ENV{NODELIST}) {
+                $i_node++;
+                print "\$i_node = $i_node\n" unless $quiet;
+                foreach my $j (0 .. $settings{'n_proc_per_node'}-1) {
+                    my $k;
+                    if (defined $nonserial_procN) {
+                        $k = $i_node + $settings{'n_nodes'} * $j;
+                    } else {
+                        $k = $settings{'n_proc_per_node'} * $i_node + $j;
+                    }
+                    my $dir = "proc$k";
+                    scp_local_files($dir, $node);
+                }
+            }
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub scp_local_files {
+# Transfer the relevant files from the local host to the given node
+    my ($dir, $node) = @_;
+
+    my %to_copy = get_files_to_copy_to_local_disc();
+    foreach my $f (keys %to_copy) {
+        next unless ($to_copy{$f});
+
+        my $file = "$data_dir/$dir/$f";
+        if (-e $file) {
+            scp($file, $node, "$ENV{SCRATCH_DIR}/$dir/");
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub scp {
+# Transfer a file using 'scp'
+    my ($source, $remhost, $target) = @_;
+
+    my @scp = split(/\s+/, $ENV{SCP}); # split cmd name and options
+    system(@scp, $source, "${remhost}:$target") == 0
+      or die "Couldn't scp $source to ${remhost}:$target\n";
+}
+# ---------------------------------------------------------------------- #
+sub get_files_to_copy_to_local_disc {
+# Return hash mapping file names to true or false (indicating: copy or
+# don't copy this file to local disc)
+    my %to_copy
+      = ( 'var.dat'              => 1,
+          'VAR0'                 => 1,
+          'global.dat'           => 1,
+          'timeavg.dat'          => 1,
+          '../allprocs/dxyz.dat' => 1,
+          'pvar.dat'             => $settings{'lparticles'},
+          'qvar.dat'             => $settings{'lpointmasses'},
+          'crash.dat'            => 1,
+        );
+    return %to_copy;
+}
+# ---------------------------------------------------------------------- #
+sub time_system_cmd {
+# Run a system command through '/usr/bin/time -p'
+    my @cmd_line = @_;
+
+    write_to_file('run_command.log', "@cmd_line");
+
+    if (-X '/usr/bin/time') {
+        run_system_cmd(('/usr/bin/time', '-p'), @cmd_line);
+    } elsif (`time echo 1 2>/dev/null`) {
+        run_system_cmd('time', @cmd_line);
+    } else {
+        run_system_cmd(@cmd_line);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub run_system_cmd {
+# Run the given system command and die if it exits with error status
+    my @cmd_line = @_;
+
+    $! = 0;
+    clear_error();
+
+    if (@environment_args) {
+        @cmd_line = ('env', @environment_args, @cmd_line);
+    }
+
+    if ($debug) {
+        print "Running system cmd <", join("> <", @cmd_line), ">\n";
+    } else {
+        print "Running '@cmd_line'...\n";
+    }
+
+    $| = 1;
+    open (CMD, "@cmd_line |");
+    my $line;
+    while ($line = <CMD>) { print $line; }
+    close (CMD);
+    $| = 0;
+
+    my $status = $?;
+    if ($status != 0) { warn "'@cmd_line' failed: $!\n"; }
+    if (-e $errorfile) {
+        print "Found ERROR file from start.x\n";
+        $status |= 16;
+        clear_error();
+    }
+
+    die "Aborting.\n" if ($status != 0);
+}
+# ---------------------------------------------------------------------- #
+sub run_system_cmd_recoverably {
+# Run the given system command like run_system_cmd(), but don't die
+    my @cmd_line = @_;
+
+    $! = 0;
+
+    if ($debug) {
+        print "Running system cmd <", join("> <", @cmd_line), ">\n";
+    } else {
+        print "Running\n  @cmd_line\n";
+    }
+    system(@cmd_line) == 0 or warn "@cmd_line failed: $!\n";
+}
+# ---------------------------------------------------------------------- #
+sub shutdown_mpi {
+# Shut down any MPI daemon we have started
+    if ($booted_mpd) {
+        print "Shutting down mpd.. ";
+        run_system_cmd('mpdallexit');
+        print "..done\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub local_settings {
+# Return hash of local settings like hostname. number of cpus, datadir,
+# etc.
+    my %settings;
+
+    # Host name
+    my $hn = `hostname`;
+    chomp $hn;
+    $settings{'hostname'} = $hn;
+    identify_setting('hostname', %settings);
+
+    # Compiled with MPI?
+    my $executable = 'src/start.x';
+    if (! -r $executable) {
+        my $cwd = getcwd();
+        die "Cannot read $executable"
+            . "\ncwd is $cwd"
+            . "\nls gives\n\n"
+            . `ls`
+            . "\nls src/start* gives\n\n"
+            . `ls src/start*`;
+    }
+    $settings{'mpi'}
+      = `fgrep -c 'initialize_mpicomm: enabled MPI' src/start.x` + 0;
+    unless ($quiet) {
+        if ($settings{'mpi'} + 0) {
+            print "MPI run\n"
+        } else {
+            print "Non-MPI run\n";
+        }
+    }
+
+    # Yin-Yang
+    $settings{'lyinyang'} = 0 + defined(match_line_ix(
+        '^[^!]*lyinyang *= *T', 'start.in'));
+
+    # Number of CPUs (from cparam.local), etc.
+    ($settings{'ncpus'}) = match_line_ix(
+        '^ \s* integer\b [^\!]* ncpus \s*=\s* ([0-9]*)', 'src/cparam.local'
+    );
+
+    my @nodes = get_node_list($settings{'ncpus'});
+    my $N = @nodes + 0;
+    my $ppn = $settings{'ncpus'} / $N;
+
+    if (get_setting(\%settings, 'lyinyang')) {
+      $ppn *= 2;
+      print count_with_plural_s( 2*$settings{'ncpus'}, 'CPU'), "\n" unless $quiet;
+    } else {
+      print count_with_plural_s( $settings{'ncpus'}, 'CPU'), "\n" unless $quiet;
+    }
+
+    $settings{'n_nodes'} = $N;
+    $settings{'n_proc_per_node'} = $ppn;
+    if ($settings{'mpi'} && ! $quiet) {
+        print count_with_plural_s($N, 'node'), ", ",
+            count_with_plural_s($ppn, 'CPU'), " per node\n"
+    }
+    print "nodes: <", join("> <", @nodes), ">\n" if ($debug);
+
+    # Particles
+    $settings{'lparticles'} = 0 + defined(match_line_ix(
+        'particles_init_pars', 'start.in'));
+    identify_setting('lparticles', %settings);
+    $settings{'lpointmasses'} = 0 + defined(match_line_ix(
+        'pointmasses_init_pars', 'start.in'));
+    identify_setting('lpointmasses', %settings);
+    return %settings;
+}
+# ---------------------------------------------------------------------- #
+sub identify_setting {
+# Print diagnostic line
+    my ($tag, %settings) = @_;
+
+    print "$tag = $settings{$tag}\n" unless $quiet;
+}
+# ---------------------------------------------------------------------- #
+sub get_setting {
+# Return a given setting from hash, or die;
+    my ($settings_ref, $key) = @_;
+
+    my $setting = $settings_ref->{$key};
+
+    if (defined $setting) {
+        return $setting;
+    } else {
+        die "No such local setting: $key\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub update_runtime_dir {
+# Make sure ./runtime/ directory exists and is up to date.
+
+    # Create dir
+    unless (-d $runtime_dir) {
+        mkdir $runtime_dir or die "Cannot create $runtime_dir: $!\n";
+    }
+
+    # Clean dir
+    if (<$runtime_dir/*>) {
+        system("rm $runtime_dir/*") == 0
+          or die "Cannot clean ./runtime/: $!\n";
+    }
+
+    # Write files
+    unless (-e "$runtime_dir/README") {
+        write_to_file(
+            "$runtime_dir/README",
+            "runtime/\n"
+            . "--------\n"
+            . "This directory is created by $cmdname.\n"
+            . "It can be safely removed while the code is not running.\n"
+        );
+    }
+}
+# ---------------------------------------------------------------------- #
+sub expand_cmd_sequence {
+# Expand subcommand sequence, replacing <cmd>^n by <cmd> <cmd> ...
+    my @cmds = @_;
+
+    my @sequence;
+    if (@cmds) {                # 'pc_run' with subcommands
+        for my $command (@cmds) {
+            if ($command =~ /^ \s* (.*) \^ ([0-9]+) \s* $/x) {
+                my ($cmd, $multiplier) = ($1, $2);
+                push @sequence, ($cmd) x $multiplier;
+            } else {
+                push @sequence, $command;
+            }
+        }
+    } else {                    # 'pc_run' without subcommands
+        if (requires_start()) {
+            push @sequence, 'start', 'run';
+        } else {
+            push @sequence, 'run';
+        }
+    }
+
+    return @sequence;
+}
+# ---------------------------------------------------------------------- #
+sub requires_start {
+# Does the cwd require start.x before running?
+
+    return ! -s "data/param.nml";
+}
+# ---------------------------------------------------------------------- #
+sub cd_to_wordir {
+# Cd to the work directory for various queuing systems
+    for my $dir (
+                 $ENV{PBS_O_WORKDIR},     # PBS
+                 $ENV{QSUB_WORKDIR},      # SUPER-UX's nqs
+                 $ENV{LOADL_STEP_INITDIR} # IBM Loadleveler
+                ) {
+        if (defined $dir) {
+            if (-d $dir) {
+                chdir $dir or die "Cannot chdir to $dir: $!\n";
+                return;
+            } else {
+                warn "No such directory: $dir\n";
+            }
+       }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub setup_datadir {
+# Ensure we have a data/ directory with the correct subdirectory
+# structure.
+#
+#  If we don't have a data subdirectory: stop here (it is too easy to
+#  continue with an NFS directory until you fill everything up).
+#
+    unless (-d "$data_dir") {
+        print "\n";
+        print ">>  STOPPING: need $data_dir directory\n";
+        print ">>  Recommended: create $data_dir as link to directory on a\n";
+        print ">>  scratch disk\n";
+        print ">>  Not recommended: you can generate $data_dir with\n";
+        print ">>  'mkdir $data_dir', but that will most likely end up on\n";
+        print ">>  your NFS file system and be slow.\n";
+        print "\n";
+        exit -1;
+    }
+
+    ## Create / clean necessary data directories
+    for my $subdir (subdir_list()) {
+        my $dir = "$data_dir/$subdir";
+        if (-d $dir) {
+            opendir my $dh, $dir
+              or die "Cannot read directory $dir\n";
+            my @files = readdir($dh);
+            # Remove everything except '.', '..', 'var.dat':
+            my @files_to_delete
+              = grep { !m/^ ( var\.dat | \. \.? ) $/x } @files;
+            @files_to_delete = map { $_ = "$dir/" . $_; } @files_to_delete;
+
+            if (@files_to_delete) {
+                print "Removing @files_to_delete\n" if $debug;
+                unlink_if_exist(@files_to_delete);
+            }
+
+            closedir $dh;
+        } else {
+            mkdir $dir or die "Cannot mkdir $dir: $!\n";
+        }
+    }
+
+    ## Clean up previous runs
+    unless (-e 'NOERASE') {
+        archive_time_series();
+        my @files_to_delete = (
+            <$data_dir/*.dat>,
+            <$data_dir/*.nml>,
+            <$data_dir/param*.pro>,
+            <$data_dir/index*.pro>,
+            <$data_dir/averages/*>
+        );
+        unlink_if_exist(@files_to_delete);
+        unlink_if_exist("$data_dir/move-me.list", "$data_dir/moved-files.list");
+    }
+}
+# ---------------------------------------------------------------------- #
+sub subdir_list {
+# Return list of directories below data/ that must exist
+    my @subdirs = qw/ allprocs averages idl /;
+    my $HDF5 = `grep -Eci '^ *hdf5_io *= *hdf5_io_' src/Makefile.local`;
+    if ($HDF5 > 0) {
+        push @subdirs, 'slices';
+    } else {
+        for my $i (1..$Ncpus) {
+            push @subdirs, 'proc' . ($i - 1);
+        }
+    }
+    return @subdirs;
+}
+# ---------------------------------------------------------------------- #
+sub get_node_list {
+# Extract the list of nodes from queuing-system specific environment
+# variable.
+# We use a map with entries
+#   VAR => 'name'
+# or
+#   VAR => \&function
+# In the first case, extract node list from the file pointed to by
+# $ENV{VAR}, or from the calue of $ENV{VAR}.
+# If a function ref is given, that function takes the environment variable
+# as argument and returns @nodelist.
+    my ($ncpus) = @_;
+
+    my %qs_map = (
+        'PE_HOSTFILE'          => 'SGE',
+        'PBS_NODEFILE'         => 'PBS',
+        'LSB_HOSTS'            => 'LSF',
+        'LOADL_PROCESSOR_LIST' => 'LoadLeveler',
+        'SLURM_NODELIST'       => 'SLURM (Simple Linux Util. for Res. Mgmt.)',
+        'JOB_ID'               => \&job_id_handler,
+        'OAR_FILE_NODES'       => 'OARSUB',
+        'SP_HOSTFILE'          => 'EASY',
+    );
+
+    for my $var (qw/
+                     PE_HOSTFILE
+                     PBS_NODEFILE
+                     LSB_HOSTS
+                     LOADL_PROCESSOR_LIST
+                     SLURM_NODELIST
+                     JOB_ID
+                     OAR_FILE_NODES
+                     SP_HOSTFILE
+                   /) {
+        my $env_var = $ENV{$var};
+        next unless (defined $env_var);
+
+        my $handler = $qs_map{$var}
+          or die "Inconsistent qs_map: missing entry for $env_var\n";
+        if (ref($handler)) { # => \&function
+            return &$handler($env_var);
+        } else {            # => 'name'
+            return default_qs_handler($env_var);
+        }
+    }
+
+    # Fall back on host name
+    my $hn = `hostname`;
+    chomp $hn;
+    return ($hn) x $ncpus;
+}
+# ---------------------------------------------------------------------- #
+sub default_qs_handler {
+# Given the content of a queuing-system related environment variable,
+# extract and return node list
+    my ($env_var) = @_;
+
+    my $content;
+    if (-e $env_var) {
+        $content = join(' ', get_file_content($env_var));
+    } else {
+        $content = $env_var;
+    }
+
+    my @entries = split(/\s+/, slurm_expand($content));
+
+    @entries =
+        grep { ! /=/ }          # lam's 'cpu=2' specifier
+        grep { ! /:/ }          # where from?
+        grep { ! /^[0-9]+$/ }   # mpich's 'node12 1' group label
+        @entries;
+
+    return uniq(@entries);
+}
+# ---------------------------------------------------------------------- #
+sub job_id_handler {
+# Given the content of $ENV{JOB_ID}, identify the queuing system we
+# are under and extract and return node list
+    my ($job_id) = @_;
+
+    if (-e "$ENV{HOME}/.score/ndfile.$job_id") {
+        identify_job('Scout');
+        return default_qs_handler("$ENV{HOME}/.score/ndfile.$job_id");
+    } else {
+        # JOB_ID may be set eithout Scout, e.g. for wd running SGE on
+        # the Kabul cluster
+        print "Apparently not parallel environment job\n" unless $quiet;
+        return ();
+    }
+}
+# ---------------------------------------------------------------------- #
+sub slurm_expand {
+# Given the content of $ENV{SLURM_NODELIST}, expand a string like
+#   n[41,43-49,69-70,111-114]
+# into the space-separated explicit form
+#   n41 n43 n44 n45 n46 n47 n48 n49 n69 n70 n111 n112 n113 n114
+# and return that as a string
+    my ($text) = @_;
+
+    if ($text =~ /\s* ([^[]+) \[ ([^\]]*) \] /x) {
+        my ($prefix, $list) = ($1, $2);
+        $list =~ s/([0-9]+)-([0-9]+)/join(" ", $1..$2)/eg;
+        $list =~ s/([ ,]+)/ $prefix/g;
+        return "$prefix$list\n";
+    } else {
+        return $text;
+    }
+}
+# ---------------------------------------------------------------------- #
+sub identify_job {
+# Print diagnostic line
+    my ($qs) = @_;
+    print "$qs job\n" unless $quiet;
+}
+# ---------------------------------------------------------------------- #
+sub run_extra_setup_script {
+#  Execute some script or command specified by the user.
+#  E.g. run src-to-data to save disk space in /home by moving src/ to
+#  data/ and linking
+    if (defined $ENV{PENCIL_START1_CMD}) {
+        print "Running $ENV{PENCIL_START1_CMD}\n" unless ($quiet);
+        run_system_cmd($ENV{PENCIL_START1_CMD});
+    }
+}
+# ---------------------------------------------------------------------- #
+sub honour_nostart {
+#  For testing backwards compatibility, do not excecute start.x, an do not
+#  delete existing var.dat (etc.) files, if a NOSTART file exists.
+#  Rename time_series.dat, so run.x can write a fresh one to compare
+#  against.
+#
+    if (-e 'NOSTART') {
+        print "Found NOSTART file. Won't run start.x\n";
+        archive_time_series();
+        exit 0;
+    }
+}
+# ---------------------------------------------------------------------- #
+sub handle_local_binary {
+# Copy given binary to scratch dir and start remote-top in background
+    my ($binary) = @_;
+
+    return unless $local_binary;
+
+    print "Copying $binary to $ENV{SCRATCH_DIR}\n" unless $quiet;
+    use File::Copy;
+    copy($binary, $ENV{SCRATCH_DIR})
+      or die "Cannot copy $binary to $ENV{SCRATCH_DIR}\n";
+
+    system("remote-top > remote-top.log 2>&1 &") == 0
+      or die "Cannot start remote-top in background: $!";
+}
+# ---------------------------------------------------------------------- #
+sub identify_revision {
+# Print revision info
+    my ($binary) = @_;
+
+    system("$ENV{PENCIL_HOME}/utils/pc_print_revision_file", $binary);
+}
+# ---------------------------------------------------------------------- #
+sub handle_copy_snapshots {
+# If local disk is used, copy var.dat back to the data directory
+    my ($logfile) = @_;
+
+    if ($local_disc) {
+        clear_file($logfile);
+        copy_snapshots($logfile, 'var.dat');
+        copy_snapshots($logfile, 'VAR0');
+        my %to_copy = get_files_to_copy_to_local_disc();
+        my @files = keys %to_copy;
+        print "Copying ", join(",", @files), " back to data directory\n";
+        foreach my $file (@files) {
+            if (-e $file) {
+                copy_snapshots($logfile, $file);
+            }
+        }
+
+        kill_remote_processes();
+
+        if ($settings{'remove_scratch_root'}) {
+            run_system_cmd('rm', '-rf', $ENV{SCRATCH_DIR});
+        }
+
+        print "Done\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub copy_snapshots {
+# Run $copy_snapshots and append the output to a log file
+    my ($logfile, @args) = @_;
+    run_system_cmd("$copy_snapshots -v @args >> $logfile 2>&1");
+}
+# ---------------------------------------------------------------------- #
+sub handle_rerun {
+# If a RERUN file exists and $action is 'run', do $action again.
+# Remove RERUN.
+    my ($subcmd) = @_;
+
+    if (-e $rerunfile) {
+        my $separator_line = '=' x 70 . "\n";
+        unlink $rerunfile;
+        if ($subcmd eq 'run') {
+            print $separator_line;
+            print "Found RERUN file\n";
+            print "Rerunning in same directory\n";
+            print $separator_line;
+            unshift @subcmds, $subcmd;
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub handle_newdir {
+# If a NEWDIR file exists, try to rerun 'run' action there.
+# If this doesn't make sense, rerun 'run' action here.
+    my ($subcmd) = @_;
+
+    if (-e $newdirfile) {
+        my $separator_line = '=' x 70 . "\n";
+        my $new_dir = (get_file_content($newdirfile))[0];
+        clear_lock();
+        unlink $newdirfile;
+        my $old_dir = getcwd();
+        if ($subcmd eq 'run') {
+            if (-d $new_dir && is_run_directory($new_dir)) {
+                chdir $new_dir;
+                append_to_file_with_timestamp(
+                    "$old_dir/$data_dir/directory_change.log",
+                    ("Stopped run",
+                     "New run directory: $new_dir"
+                    ));
+                append_to_file_with_timestamp(
+                    "$new_dir/$data_dir/directory_change.log",
+                    ("Transferred here via NEWDIR",
+                     "Old run directory: $new_dir"
+                    ));
+                print $separator_line;
+                print "Found NEWDIR file\n";
+                print "Rerunning in new directory <$new_dir>\n";
+
+                # Run start.x if necessary
+                if (requires_start()) {
+                    print "Didn't find a var.dat file => running start.x\n";
+                    print $separator_line;
+                    dispatch_subcommand('start');
+                } else {
+                    print $separator_line;
+                }
+            } else {
+                my $message = "NEWDIR directory <$new_dir>";
+                if (-e $new_dir) {
+                    $message .= " is not a run directory.\n";
+                } else {
+                    $message .= " does not exist.\n";
+                }
+                $message .= "Rerunning in original directory <$old_dir>\n";
+                print $separator_line;
+                print $message;
+                print $separator_line;
+            }
+
+            unshift @subcmds, $subcmd;
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub is_run_directory {
+    my ($dir) = @_;
+
+    foreach my $f ('run.in', 'src/run.x') {
+        return 0 unless -e "$dir/$f";
+    }
+
+    return 1;
+}
+# ---------------------------------------------------------------------- #
+sub kill_remote_processes {
+# Kill any remaining copy_snapshot or remote-top processes
+
+    my @pids = `ps -U $ENV{USER} -o pid,command`;
+    @pids = map { chomp; $_ } @pids;
+    @pids = grep /remote-top|$copy_snapshots/, @pids;
+    @pids = map { s/^\s*([0-9]+).*/$1/; $_ } @pids; # extract just pid
+
+    print "Shutting down processes @{pids}:\n";
+    foreach my $pid (@pids) {
+        # need to do in a loop, and check for existence, since
+        # some systems (Hitachi) abort this script when trying
+        # to kill non-existent processes
+        print "  pid $pid\n";
+        if ( `ps -p $pid | fgrep -c $pid` ) {
+            $! = 0;
+            kill "KILL", $pid
+              or warn "Couldn't kill process $pid: $!\n";
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub match_line_ix {
+# Cycle through the lines of file $filename and try matching them
+# case-insensitively (modifier i) with the extended (modifier x) $regexp.
+# For the first matching line, return the matched parts.
+# If no line matches, return undef;
+    my ($regexp, $filename) = @_;
+
+    open(my $fh, "< $filename")
+      or die "Cannot open $filename for reading: $!\n";
+    while (defined (my $line = <$fh>)) {
+        my @matches = ($line =~ /$regexp/ix);
+        if (@matches) {
+            close $fh or die "Cannot close $filename: $!\n";
+            return @matches;
+        }
+    }
+
+    close $fh or die "Cannot close $filename: $!\n";
+    return undef;
+}
+# ---------------------------------------------------------------------- #
+sub get_file_content {
+# Read all lines from file (queuing-sytem specific), stripping whitespace
+# (inculding trailing newlines) and comments and return result as array
+    my ($file) = @_;
+
+    my @content;
+    open my $fh, "<$file"
+      or die "Cannot open $file for reading: $!";
+    while (defined (my $line=<$fh>)) {
+        $line =~ s{#.*}{};             # strip comments
+        $line =~ s{^\s*(.*?)\s*$}{$1}; # strip whitespace
+        next unless $line =~ /\S/;     # ignore empty lines
+        last if $line =~ /^\s*\[/;     # stop at mpich's [CS] tag
+        push @content, $line;
+    }
+    return @content;
+}
+# ---------------------------------------------------------------------- #
+sub archive_time_series {
+# Rename an existing data/timeseries.dat file to
+# data/time_series.<timestring>
+    my $tseries = "$data_dir/time_series.dat";
+    if (-e $tseries && -s $tseries) {
+        my $archived_series = "$data_dir/time_series." . timestr();
+        rename $tseries, $archived_series
+          or die "Cannot rename $tseries to $archived_series: $!\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub start_background_helpers {
+
+    # On machines with local scratch directory, initialize automatic
+    # background copying of snapshots back to the data directory.
+    # Also, if necessary copy executable to $SCRATCH_DIR of master node
+    # and start top command on all procs.
+    if ($local_disc) {
+        print "Starting $copy_snapshots in background\n" if $debug;
+        run_system_cmd("$copy_snapshots -v > copy-snapshots.log 2>&1 &");
+    }
+
+    # Copy output from 'top' on run host to a file we can read from the
+    # front end
+    if ($remote_top) {
+        run_system_cmd('remote-top > remote-top.log 2>&1 &');
+    }
+    if ($local_binary) {
+        if ($debug) {
+            print "ls $run_x $ENV{SCRATCH_DIR} before copying:\n";
+            system('ls', '-lt', $run_x, $ENV{SCRATCH_DIR});
+        }
+        copy($run_x, $ENV{SCRATCH_DIR});
+        if ($debug) {
+            print "ls $run_x \${SCRATCH_DIR} after copying:\n";
+            system('ls', '-lt', $run_x, $ENV{SCRATCH_DIR});
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+sub write_job_id {
+# Write $PBS_JOBID or $LOADL_STEP_ID to file (important when run is
+# migrated within the same job)
+    my ($phase) =@_;
+
+    my $jobid_file = "$data_dir/jobid.dat";
+    append_jobid_line(
+        $jobid_file, $phase, $ENV{PBS_JOBID},     $ENV{PBS_O_QUEUE});
+    append_jobid_line(
+        $jobid_file, $phase, $ENV{LOADL_STEP_ID}, $ENV{LOADL_STEP_CLASS});
+    append_jobid_line(
+        $jobid_file, $phase, $ENV{SLURM_JOBID},   undef);
+    append_jobid_line(
+        $jobid_file, $phase, $ENV{SP_JID},        undef);
+}
+# ---------------------------------------------------------------------- #
+sub append_jobid_line {
+    my ($filename, $phase, $job_id, $queue) = @_;
+
+    return unless defined $job_id;
+
+    append_to_file(
+        $filename,
+        "$job_id  RUN $phase on "
+        . (defined $queue ? "$queue " : '')
+        . timestr()
+    );
+}
+# ---------------------------------------------------------------------- #
+sub log_rundirectory {
+    append_to_file(
+        "$ENV{PENCIL_HOME}/.run_directories.log",
+        (scalar localtime()),
+        getcwd,
+        ""
+    );
+}
+# ---------------------------------------------------------------------- #
+sub get_lock {
+    
+    if (-e $lockfile) {
+        print "\n";
+        print "pc_run: found LOCK file\n";
+        print "(if it is left over from a crash, remove it manually: rm LOCK)\n";
+        print "\n";
+        print "Will *not* start in this directory, as the code may already ";
+        print "be running.\n";
+        print "Checking for NEWDIR file to tell us to run somewhere else:\n";
+        print "[Not yet implemented]\n";
+        die "\n";           # die(), not exit() or lockfile gets removed
+    } else {
+        unless (-e 'NEVERLOCK') {
+          write_to_file($lockfile);
+          $locked = 1;
+        }
+        # Save our unique PID:
+        # store_into_file("PID", $$);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub clear_lock {
+    if (-e $lockfile) {
+        unlink $lockfile
+          or warn "Cannot remove lock file $lockfile: $!\n";
+    }
+    $locked = 0;
+}
+# ---------------------------------------------------------------------- #
+sub clean_up_before_run {
+# Clean up control and data files
+# NB. Don't remove NEWDIR it may have been put there on purpose so as
+#     to catch a crash and run something else instead.
+    unlink_if_exist(qw/ STOP
+                        RELOAD
+                        RERUN /);
+}
+# ---------------------------------------------------------------------- #
+sub clear_error {
+    if (-e $errorfile) {
+        unlink $errorfile
+          or warn "Cannot remove lock file $errorfile: $!\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub clear_completed {
+    if (-e $completedfile) {
+        unlink $completedfile
+          or warn "Cannot remove lock file $completedfile: $!\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub timestr {
+# Return date and time in a compact way to attach to file names
+    return POSIX::strftime("%y%m%d.%H%M", localtime);
+}
+# ---------------------------------------------------------------------- #
+sub clear_file {
+# Ensure file exists and is empty
+    my ($file) = @_;
+
+    if (-e $file) {
+        open my $fh, "> $file"
+          or die "Cannot open $file for writing: $!\n";
+        close $fh;
+    } else {
+        write_to_file($file, '');
+    }
+}
+# ---------------------------------------------------------------------- #
+sub write_to_file {
+# Create a file with current time stamp.
+# Write @text (line-wise) to file if defined, otherwise write short note
+# identifying this script.
+    my ($filename, @text) = @_;
+
+    unless (@text) {
+        push @text,
+          "File: $filename\n"
+          . "Generator: $cmdname\n"
+          . "Time stamp: "
+          . strftime("%a %Y-%m-%d %H:%M:%S", localtime())
+          . "\n";
+    }
+
+    store_into_file($filename, @text);
+}
+# ---------------------------------------------------------------------- #
+sub store_into_file {
+# Create a file and store a given @text (line-wise), if defined.
+    my ($filename, @text) = @_;
+
+    open(my $fh, "> $filename")
+      or die "Cannot open $filename for writing: $!\n";
+
+    foreach my $line (@text) {
+        chomp $line;
+        print $fh $line, "\n";
+    }
+
+    close $fh or die "Cannot close file $filename: $!\n";
+}
+# ---------------------------------------------------------------------- #
+sub append_to_file {
+# Append @text (line-wise) to the given file
+    my ($filename, @text) = @_;
+
+    open my $fh, ">> $filename"
+      or die "Cannot open $filename for appending: $!\n";
+
+    foreach my $line (@text) {
+        chomp $line;
+        print $fh $line, "\n";
+    }
+
+    close $fh or die "Cannot close $filename: $!\n";
+}
+# ---------------------------------------------------------------------- #
+sub append_to_file_with_timestamp {
+# Append @text (line-wise) to the given file, prepending a timestamp to
+# each line
+    my ($filename, @text) = @_;
+
+    my $timestamp = POSIX::strftime("%Y-%m-%d %H:%M:%S", localtime);
+    my @new_text = map { $_ = $timestamp . " " . $_ } @text;
+    append_to_file($filename, @text);
+}
+# ---------------------------------------------------------------------- #
+sub unlink_if_exist {
+# Unlink the given files or die with useful error message, but silently
+# skip non-existing files
+    my @files = @_;
+
+    my @existing_files = grep { -e } @files;
+    if (@existing_files) {
+        unlink @existing_files
+          or die "Cannot remove all of @existing_files\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub uniq {
+# Remove duplicate elements from list, leaving order untouched
+    my @list = @_;
+
+    my (@uniq, %seen);
+    for my $element (@list) {
+        push @uniq, $element unless $seen{$element}++;
+    }
+
+    return @uniq;
+}
+# ---------------------------------------------------------------------- #
+sub mention {
+# Reference a variable without doing anything.
+# Use this to suppress ''Name "Pencil::ConfigFinder::debug" used only
+# once'' warning
+    my @args = @_;
+}
+# ---------------------------------------------------------------------- #
+sub printopts {
+# Print command line options
+    my ($optsref) = @_;
+
+    my %options = %$optsref;
+    foreach my $opt (keys(%options)) {
+        print STDERR "\$options{$opt} = '$options{$opt}'\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub count_with_plural_s {
+# Return "$n $name" or "$n ${name}s", depending on $n.
+    my ($n, $name) = @_;
+
+    my $plural_s = ($n + 0 > 1) ? 's' : '';
+    return "$n $name" . $plural_s;
+}
+# ---------------------------------------------------------------------- #
+sub usage {
+# Extract description and usage information from this file's header.
+    my $thisfile = __FILE__;
+    local $/ = '';              # Read paragraphs
+    open my $fh, '<', $thisfile or die "Cannot open $thisfile\n";
+    while (<$fh>) {
+        # Paragraph _must_ contain 'Description:' or 'Usage:'
+        next unless /^\s*\#\s*(Description|Usage):/m;
+        # Drop 'Author:', etc. (anything before 'Description:' or 'Usage:')
+        s/.*?\n(\s*\#\s*(Description|Usage):\s*\n.*)/$1/s;
+        # Don't print comment sign:
+        s/^\s*# ?//mg;
+        last;                        # ignore body
+    }
+    close $fh;
+    return $_ || "<No usage information found>\n";
+}
+# ---------------------------------------------------------------------- #
+sub version {
+# Return SVN/CVS data and version info.
+    my $doll = '\$';              # Need this to trick CVS
+    my $rev = '$Revision$';
+    my $date = '$Date$';
+    $rev =~ s/${doll}Revision:\s*(\S+).*/$1/;
+    $date =~ s/${doll}Date:\s*(\S+).*/$1/;
+
+    return "$cmdname version $rev ($date)\n";
+}
+# ---------------------------------------------------------------------- #
+sub get_last {
+# Return the last run dates+paths recorded in the .run_directories.log file
+
+    `tail -20 $ENV{PENCIL_HOME}/.run_directories.log`;
+}
+# ---------------------------------------------------------------------- #
+
+END {
+    clear_lock() if ($locked);
+    unlink 'resubmit.log';
+    unlink 'rs';
+
+    system('env | sort') if ($debug);
+
+    Pencil::Util::notify('running') if $notify;
+
+}
+
+# End of file build

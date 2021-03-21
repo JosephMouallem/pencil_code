@@ -1,0 +1,28 @@
+&run_pars
+  cvsid='$Id$',
+  nt=201, it1=50, cdt=0.4, isave=100, itorder=3
+  dsnap=20., dvid=200., 
+  lpencil_check=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+  lremove_mean_momenta=T
+/
+&density_run_pars
+  lupw_lnrho=T
+/
+&forcing_run_pars
+  iforce='helical', force=.01, relhel=1.
+/
+&testfield_run_pars
+  itestfield='B11-B22'
+  etatest=5e-3
+  leta_rank2=T
+  lsoca=F
+/
+&shear_run_pars
+/
+&viscosity_run_pars
+  nu=5e-3
+/

@@ -1,0 +1,55 @@
+
+                           ukaff-namelist-bug
+                          --------------------
+
+$Id$
+
+
+1. Symptoms:
+
+  On Ukaff, the attached minimal code should print the following:
+  
+    1.
+    2.
+    3.
+    Finished successfully
+  
+  but in reality crashes with
+  
+    1.
+    2.
+  
+    lib-4001 : UNRECOVERABLE library error 
+    
+    Encountered during a namelist READ from unit 1
+    Fortran unit 1 is connected to a sequential formatted text file: "run.in"
+    IOT Trap
+    Abort
+  
+  Commenting out almost any unused routine in magnetic.f90 or hydro.f90 or
+  even just commenting out variables in these routines makes the code
+  succeed.
+
+  Using the compiler option -n32 instead of -64 also makes it work (at least on tac)
+
+2. Command sequence:
+
+  ukaff>  make
+  ukaff>  run.x
+
+3. Other compilers tested (OPK means problem could not be reproduced):
+   - Intel F95  (Linux)  OK
+   - NAG F95    (Linux)  OK
+   - Compaq F95 (Tru64)  OK
+   - Sun F95    (SunOS)  OK
+
+5. Original date:
+
+  Wed Jun 12 18:19:51 BST 2002
+
+6. Workaround:
+   Move the namelist declaration
+
+      namelist /magnetic_run_pars/ eta
+ 
+   from magnetic.f90 to param_io.f90

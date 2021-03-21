@@ -1,0 +1,17 @@
+###                             -*-Makefile-*-
+### Makefile for modular pencil code -- local part
+### Included by `Makefile'
+###
+
+MPICOMM   =   mpicomm
+
+HYDRO     =   hydro_kinematic
+DENSITY   = nodensity
+ENTROPY   = noentropy
+MAGNETIC  = nomagnetic
+
+GRAVITY   = nogravity
+FORCING   = noforcing
+VISCOSITY = noviscosity
+EOS       = noeos
+TESTFIELD =   inactive/testfield

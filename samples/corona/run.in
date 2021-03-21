@@ -1,0 +1,64 @@
+!                     -*-f90-*-   (for emacs)
+!  run parameters for corona
+!
+&run_pars
+  ip = 14
+  cvsid = '$Id$'
+  nt = 26
+  it1 = 5
+  isave = 50
+  cdt = 0.4, cdtv = 0.08, cdts = 0.08
+  itorder = 3
+  dsnap = 1.0
+  !
+  bcz      = 's:a', 's:a', 'a', 'set:a2', 'set:a2', 'pfe', 'nil', 'nil'
+  fbcz_bot =      ,      ,    ,         ,         ,  0.2 ,      ,
+  fbcz1    =      ,      ,    ,16.796295,0.78135928
+! lpencil_check = T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&grav_run_pars
+/
+&entropy_run_pars
+/
+&magnetic_run_pars
+  iresistivity = 'shock', 'eta-const'
+  eta_shock = 1.0
+  eta = 1e-3
+/
+&viscosity_run_pars
+  ivisc = 'nu-shock', 'nu-const' 
+  nu_shock = 1.0
+  nu = 1e-3
+/
+&special_run_pars
+  K_spitzer = 4e-10 ! Spitzer heat conduction
+  K_iso = 1.e-4     ! isotropic heat conduction proptional to |grad(T)|
+!
+!  hcond1 = 0.5e-3
+!  hcond2 = 1.0e-1
+!  hcond3 = 1.0e-1
+!
+  nc_tau = 0.1      ! Newton cooling decay half-time
+  nc_alt = 1.5      ! Newton cooling cutoff height
+  cool_rtv = 1.0    ! Radiative losses
+  b_tau = 0.5       ! Refresh magnetogram
+!
+  lgranulation=T
+!
+  swamp_fade_start = 3.5
+  swamp_fade_end = 4.5
+  swamp_diffrho = 1e+1
+  swamp_chi = 1e+1
+  swamp_eta = 2e+1
+/
+&shock_run_pars
+  lforce_periodic_shockviscosity = T
+  lshock_first = F
+  lshock_max5 = T
+/

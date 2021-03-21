@@ -1,0 +1,54 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$',
+  ip=10,                          ! debugging parameter
+!  xyz0  =  0.3,1.39626,-.1,      ! first corner of box  - 80 degrees
+!  xyz1  =  2.0,1.74533, .1,      ! second corner of box - 100 degrees
+  xyz0  =  0.4, 1.48353,-3.141592,! first corner of box  - 80 degrees
+  xyz1  =  2.5, 1.65806, 3.141592,! second corner of box - 100 degrees
+  lperi = F  , F  , T,            ! periodic direction?
+  bcx='a','s','s','s','s'
+  bcy='s','a','s','s','s'
+  llocal_iso=T
+  lwrite_ic=T
+  coord_system='spherical'
+  luse_latitude=T
+  lseparate_persist=T
+/
+&eos_init_pars
+  cs0  = 0.1
+  rho0 = 1.
+  gamma= 1.
+/
+&hydro_init_pars
+/
+&density_init_pars
+  ldensity_nolog=T
+  density_floor=-100
+/
+&grav_init_pars
+  ipotential='no-smooth'
+  g0=1.
+/
+&particles_init_pars
+  initxxp='random', initvvp='random'
+  eps_dtog=0.01
+/
+&pointmasses_init_pars
+  initxxq='fixed-cm'
+  initvvq='fixed-cm'
+  bcqx='out',bcqy='out',bcqz='p'
+  GNewton=1.0
+  pmass=1e-3, 1.
+  xq0=1,0
+  r_smooth=0.07,0.0
+  iprimary=2
+
+/
+&initial_condition_pars
+  density_power_law=1.5
+  temperature_power_law=1.0
+/

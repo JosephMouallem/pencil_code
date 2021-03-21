@@ -1,0 +1,18 @@
+Directory:
+    ${PENCIL_HOME}/samples/cosmicray
+SVN Id:
+    $Id$
+Maintainer:
+    Andrew Snodin <Andrew.Snodin/gmail[dot]com>
+Added:
+    09-Oct-2003
+Status:
+    working since Oct 2003
+Recommended resolution:
+    need to have suitable resolution
+Comments:
+    This is just a 1-D test. Precedure works in 1, 2, and 3 dimensions
+Reference:
+    Snodin, A. P., Brandenburg, A., Mee, A. J., & Shukurov, A.: 2006,
+    ``Simulating field-aligned diffusion of a cosmic ray gas,'' Monthly
+    Notices Roy. Astron. Soc. 373, 643-652

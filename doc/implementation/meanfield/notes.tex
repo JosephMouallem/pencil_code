@@ -1,0 +1,97 @@
+% $Id: notes.tex,v 1.57 2015/11/26 18:29:07 brandenb Exp $
+%\documentclass{article}
+\documentclass{article}
+\setlength{\textwidth}{160mm}
+\setlength{\oddsidemargin}{-0mm}
+\setlength{\textheight}{220mm}
+\setlength{\topmargin}{-8mm}
+\usepackage{graphicx,natbib}
+\graphicspath{{./fig/}{./png/}}
+\def\blue{\textcolor{blue}}
+\usepackage{bm,color}
+\input macros
+\title{}
+\author{}
+\date{\today,~ $ $Revision: 1.57 $ $}
+\begin{document}
+\maketitle
+
+\section{Implementation of the $\qp$-term}
+
+On the rhs of the momentum equation we have $\half\nab\qp\BB^2$, and so,
+with $\qp=\qp(\beta,z)$, we have
+\begin{eqnarray}
+\half\nab[\qp(\beta,z)\BB^2]
+\!&=&\!\half\qp\nab\BB^2+\half\BB^2\nab\qp\\
+\!&=&\!\half\qp\nab\BB^2+\half\BB^2\left[{\dd\qp\over\dd\beta^2}\nab\beta^2+\nab\qp\right]
+\\
+\!&=&\!\half\qp\nab\BB^2+\half\BB^2\left[{\dd\qp\over\dd\beta^2}\Beq^{-2}(
+\nab\BB^2-\BB^2\ln\rho)+\nab\qp\right]
+\\
+\!&=&\!\half\left[\qp+{\dd\qp\over\dd\beta^2}{\BB^2\over\Beq^2}\right]\nab\BB^2
++\half\BB^2\left[-{\dd\qp\over\dd\beta^2}{\BB^2\over\Beq^2}\nab\ln\rho+\nab\qp\right]
+\end{eqnarray}
+
+\section{Implementation of the $\qg$-term}
+
+\begin{eqnarray}
+%\half\nab_z[\qg(\beta,z)\BB^2]
+%=\half\left[\qp+{\dd\qp\over\dd\beta^2}{\BB^2\over\Beq^2}\right]\nab_z\BB^2
+%+\half\BB^2\left[-{\dd\qp\over\dd\beta^2}{\BB^2\over\Beq^2}\nab_z\ln\rho+\nab_z\qp\right]
+%\half{\partial\over\partial z}[\qg(\beta,z)\BB^2]
+%=\half\left[\qg+{\dd\qg\over\dd\beta^2}{\BB^2\over\Beq^2}\right]{\partial\over\partial z}\BB^2
+%+\half\BB^2\left[-{\dd\qg\over\dd\beta^2}{\BB^2\over\Beq^2}{\partial\over\partial z}\ln\rho+{\partial\over\partial z}\qg\right]
+%JW: do you mean this?
+%AB: yes, and there should be no 1/2 factor
+{\partial\over\partial z}[\qg(\beta,z)\BB^2]
+=\left[\qg+{\dd\qg\over\dd\beta^2}{\BB^2\over\Beq^2}\right]{\partial\over\partial z}\BB^2
++\BB^2\left[-{\dd\qg\over\dd\beta^2}{\BB^2\over\Beq^2}{\partial\over\partial z}\ln\rho+{\partial\over\partial z}\qg\right]
+\end{eqnarray}
+
+%Thus, altogether we have 
+In particular, when $\qp/2+\qg=a_{\rm g}\qp$ with
+$a_{\rm g}=\const$, we have
+\begin{eqnarray}
+\pmatrix{
+\partial[(\qp/2)\BB^2]/\partial x\cr
+\partial[(\qp/2)\BB^2]/\partial y\cr
+\partial[(\qp/2+\qg)\BB^2]/\partial z}
+=\half\pmatrix{
+\partial(\qp\BB^2)/\partial x\cr
+\partial(\qp\BB^2)/\partial y\cr
+\partial(a_{\rm g}\qp\BB^2)/\partial z}
+\end{eqnarray}
+The choice $a_{\rm g}=0.2$ means that
+$\qg/\qp=-\half(1-a_{\rm g})=-0.4$.
+
+%\begin{figure}[h!]\begin{center}
+%\includegraphics[width=\columnwidth]{X}
+%\end{center}\caption[]{
+%Equilibria
+%}\label{X}\end{figure}
+
+%\begin{table}[htb]\caption{
+%}\vspace{12pt}\centerline{\begin{tabular}{lccccccc}
+%\hline
+%\label{Ttimescale}\end{tabular}}\end{table}
+
+\begin{verbatim}
+\end{verbatim}
+
+%\begin{itemize}
+%\item
+%\end{itemize}
+
+%r e f
+%\begin{thebibliography}{}
+
+%\bibitem[Biskamp \& M\"uller(1999)]{BM99}
+%Biskamp, D., \& M\"uller, W.-C.\yprl{1999}{83}{2195}
+
+%\end{thebibliography}
+
+\vfill\bigskip\noindent\tiny\begin{verbatim}
+$Header: /var/cvs/brandenb/tex/etc/notes.tex,v 1.57 2015/11/26 18:29:07 brandenb Exp $
+\end{verbatim}
+
+\end{document}

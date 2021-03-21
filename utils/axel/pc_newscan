@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+#  $Id$
+#
+#  Usage:
+#    pc_newscan scan_newname [scan_newdir]
+#
+#  We can either give the full path name (in which case any reference
+#  to $wrkdir is redundant), or we can give the path name relative to the
+#  working directory (which is defined now):
+#
+wrkdir=`pwd`
+#
+#  Set olddir and newdir. If only one argument is given, $olddir is
+#  assumed to be the current working directory.
+#
+if [ $# -eq 2 ]; then
+  #
+  #  check whether absolute or relative path
+  #  by checking whether target exists
+  #
+  if [ -d `pwd`/$1 ]; then
+    olddir=`pwd`/$1
+  else
+    olddir=$1
+  fi
+  #
+  #  same for newdir
+  #
+  if [ -d `pwd`/$2 ]; then
+    newdir=`pwd`/$2
+  else
+    newdir=$2
+  fi
+else
+  olddir=`pwd`
+  cd ..
+  #
+  #  same for newdir
+  #
+  if [ -d `pwd`/$1 ]; then
+    newdir=`pwd`/$1
+  else
+    newdir=$1
+  fi
+fi
+
+#
+#  make new directories there
+#
+mkdir -p $newdir
+cd $newdir
+mkdir bin idl templates
+#
+#  goto olddir and begin populating content of newdir from here
+#
+cd $wrkdir
+echo
+echo "We are in wrkdir: $wrkdir"
+echo "pc_newrun $olddir/master $newdir/master"
+pc_newrun $olddir/master $newdir/master
+#
+cp $olddir/bin/* $newdir/bin
+cp $olddir/idl/* $newdir/idl
+cp $olddir/templates/* $newdir/templates
+#

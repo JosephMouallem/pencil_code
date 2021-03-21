@@ -1,0 +1,32 @@
+!                     -*-f90-*-   (for emacs)
+! Initialisation parameters for magnetic flux rings
+!
+&init_pars
+  cvsid='$Id$'
+  xyz0 = , , 0.
+  ! Lxyz =  6.28.,   6.28.,  6.28.
+  lperi = T,    T,   F
+  !! For non-equidistant grid:
+  ! lequidist  = T, T, F
+  ! grid_func  =  ,  , 'sinh'
+  ! coeff_grid =  ,  , 0.35
+  ! xyz_star   = , , 0.
+  !!
+  bcx = 'p' ,'p' ,'p','p', 'p', 'p', 'p'
+  bcy = 'p' ,'p' ,'p','p', 'p', 'p', 'p'
+  bcz = 'a2','a2','a','a2','a2','a2','a2'
+/
+&eos_init_pars
+  gamma=1.
+/
+&hydro_init_pars
+/
+&density_init_pars
+/
+&magnetic_init_pars
+/
+&initial_condition_pars
+  initaa='fluxrings', amplaa=1e-0
+  fring1=1e-0, Iring1=0., Rring1=1.6, wr1=0.4,
+  axisr1=0.,1.,0., dispr1=0.,0.,0.,
+/

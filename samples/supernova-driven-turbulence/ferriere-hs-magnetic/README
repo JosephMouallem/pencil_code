@@ -1,0 +1,19 @@
+Directory:
+    ${PENCIL_HOME}/samples/supernova-driven-turbulence/ferriere-hs-magnetic/
+SVN Id:
+    $Id: README 13067 2010-01-25 07:08:53Z f.a.gent@ncl.ac.uk $
+Maintainer:
+    Frederick Gent <fred.gent.ncl/gmail[dot]com>
+Added:
+    22-Jan-2010
+Status:
+    has been working in this form since 22-Jan-2010
+Recommended resolution:
+    at least 52x52x200
+Comments:
+    galactic gravity profile derived from Katia Ferriere review
+    initial density(z) profile chosen to approximate
+    isothermal hydrostatic equilibrium
+    weak azimuthal seed field (peak 1.7724e-8 Gauss)
+    proportional to gas density
+    includes radiative cooling, uv heating

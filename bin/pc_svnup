@@ -1,0 +1,57 @@
+#!/bin/csh
+#
+# $Id$
+#
+# Script to update the Pencil Code tree from svn.
+#
+# Default settings
+set all=( "src" "bin" "lib" "config" "idl" "python" "dx" "samples" "license" "bugs" "remesh" "misc" "utils" "tests")
+set include_all=1
+set rev="-rHEAD"
+set stat=0
+#
+# Parameter processing
+set dirs=( )
+foreach param ($argv)
+  switch ($param)
+    case "-h":
+    case "-help":
+      set scriptname=`basename $0`
+      echo "'Updates all necessary directories. Works from any directory."
+      echo "Usage: $scriptname [options] [dir1 [dir2 [...]]]"
+      echo "-h      display this help text"
+      echo "-I      update the src and bin directories"
+      echo "-s      check svn status as well"
+      echo "-val or -validated"
+      echo "        merge current changes into validated version"
+      exit 1
+    case "-val":
+    case "-validated":
+      set rev="-r `cat $PENCIL_HOME/misc/validation/validated.dat`"
+      breaksw
+    case "-s":
+      set stat=1
+      breaksw
+    case "-I":
+      set include_all=0
+      set dirs=( "src" "bin" )
+      breaksw
+    case "-i":
+      # Ignore this option for backwards compatibility
+      breaksw
+    default:
+      # Add manually selected directory
+      set include_all=0
+      set dirs=( $dirs $param )
+  endsw
+end
+#
+if ($include_all) then
+  set dirs=( $all $dirs )
+endif
+#
+foreach directory ( $dirs )
+  echo svn up $rev $PENCIL_HOME/$directory
+  svn up $rev $PENCIL_HOME/$directory
+  if ($stat) svn status $PENCIL_HOME/$directory
+end

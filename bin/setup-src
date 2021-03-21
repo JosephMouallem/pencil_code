@@ -1,0 +1,2 @@
+#!/bin/sh
+echo Deprecated... Please use pc_setupsrc instead.

@@ -1,0 +1,752 @@
+#!/usr/bin/perl -w
+
+# Name:   f90_qnd
+# Author: wd (Wolfgang.Dobler@ucalgary.ca)
+# Date:   28-Aug-2006
+# Synopsis:
+#   Fast re-compilation of modular F90 codes through foul play with mtimes.
+# Usage:
+#   export F90_QND_F90=g95
+#   export F90_QND_F90=ifort
+#   f90_qnd <f90-arguments>  # (i.e. drop-in replacement for f90 compiler)
+# For full documentation, run `perldoc f90_qnd'.
+
+# Copyright (C) 2006, 2007  Wolfgang Dobler
+#
+# This program is free software; you can redistribute and/or modify it
+# under the same conditions as Perl (see `perldoc perlgpl', `perldoc
+# perlartistic'), or under the GNU Public license version 2 or later.
+
+
+use strict;
+
+# Try to load Digest::MD5 module
+my $md5_implementation = 'Digest::MD5';
+eval { require Digest::MD5 } or $md5_implementation = 'md5sum';
+
+my $debug = $ENV{F90_QND_DEBUGLEVEL} || 0;
+                                # 0: be quiet
+                                # 1: be verbose
+                                # 2: dump all time stamps and md5 sums
+                                # 3: dump even the files
+my $debugfile = "./f90_qnd.log";
+my $logdir    = "./f90_qnd_log_dir";
+if ($debug > 2) {
+    system('mkdir', '-p', $logdir) == 0
+      or die "Couldn't create $logdir: $?\n";
+}
+
+my $time_immemorial = 1;        # Thu Jan 1 00:00:01 UCT 1970
+my $touch_only = 0;             # Compile by default
+
+if ($debug) {
+
+    if ($debugfile) {
+        open DEBUG, ">>$debugfile"
+          or die boldface("Cannot append to $debugfile");
+    } else {
+        *DEBUG = *STDERR;
+    }
+
+    eval "use Data::Dumper" if ($debug > 1);    # Needed later
+
+    # Visually separate our invocations
+    print DEBUG "\n", "=" x 25;
+    print DEBUG " ", scalar(localtime()), " ";
+    print DEBUG " ", "=" x 25, "\n";
+}
+
+my ($fc, @fcargs, $src, $obj);
+my (%ts_before, %ts_after, %md5_before, %md5_after);
+(my $cmdname = $0) =~ s|.*/||;
+
+## 1. Find out which compiler to run and determine module type
+
+# Compiler
+if (defined($ENV{F90_QND_F90})) {
+    $fc = $ENV{F90_QND_F90};
+} else {
+    $fc = find_f90_in_path();
+    warn boldface("$cmdname: F90_QND_F90 is not set; defaulting to `$fc'\n");
+}
+
+# Compiler arguments
+@fcargs = @ARGV;
+# Fast-track: are we to touch, rather than compile?
+if ($ENV{F90_QND_TOUCHONLY}) {
+    touch_files_and_exit(@fcargs);
+}
+
+# Split $fc at whitespace (to allow F90_QND_F90='g95 -std=f95' and such)
+my @rest;
+$fc =~ s/^\s*//;             # Strip leading whitespace (paranoia)
+($fc, @rest) = split(' ', $fc);
+unshift @fcargs, @rest;
+
+# Compiling or linking?
+if (grep /^-c$/, @fcargs) {
+    # Call of type $(FC) .. -c to really compile
+    # --> Do the nasty manipulations
+} else {
+    # No `-c' option: Linking
+    print DEBUG "Assuming a linking call; not manipulating anything...\n"
+      if ($debug);
+    compile($fc, @fcargs);
+    exit 0;
+}
+
+# Determine module type
+my $fc_base   = $fc;
+$fc_base =~ s{.*/}{};           # base filename
+$fc_base =~ s/-[0-9.]+//;       # remove trailing version number
+my %modtype = ( # map compiler names to module types
+                g95      => 'g95'     ,
+                gfortran => 'g95'     ,
+                ifort    => 'ifort'   ,
+                ifc      => 'ifort'   ,
+                );
+my $fc_modtype = $ENV{F90_QND_MODTYPE}
+                 || $modtype{$fc_base};
+
+unless (defined($fc_modtype)) {
+    $fc_modtype = 'generic'; 
+    warn boldface("$cmdname: F90_QND_MODTYPE is not set; defaulting to `$fc_modtype'\n");
+}
+
+## 2. Get file name of source file *.f90 or *.f
+my @srcfiles = grep /(.*\.f(?:90)?)$/, @fcargs ;
+if (@srcfiles ne 1) {
+    die boldface("$cmdname: Cannot handle multiple source files yet"
+                 . " (@srcfiles)\n-- and does this make sense?\n");
+}
+$src = $srcfiles[0];
+my ($base,$suf) = ($src =~ /(.*)\.(f(?:90)?)/);
+$obj = "$base.o";
+
+
+## 3. Get hashes, compile, get updated hashes
+get_ts_and_md5_for_mod(\%ts_before, \%md5_before, 'Before');
+my $fake_time_o = get_timestamp($obj);
+compile($fc, @fcargs);
+get_ts_and_md5_for_mod(\%ts_after,  \%md5_after,  'After' );
+
+
+## 4. Compare
+my $backdate_src_o = 1;      # back-date .{f90,o} unless we change our opinion
+
+my @changed = get_updated_files(\%ts_before,\%ts_after); # compare mtimes
+my @really_changed
+  = grep {    ($md5_before{$_} || 'none')
+           ne ($md5_after {$_} || 'New' )
+         }
+         @changed;
+print_details_of_changes() if ($debug);
+
+# Cycle through _all_ updated .mod files and back-date if appropriate.
+foreach my $mod_file (@changed) {
+    if (grep /^$mod_file$/, @really_changed) {
+        # Dount touch .f90 or .o if any .mod has really changed
+        $backdate_src_o = 0;
+    } else {
+        # Back-date .mod file
+        my $fake_time = $ts_before{$mod_file};
+        back_date($fake_time, $mod_file);
+    }
+}
+
+# Handle back-dating of .f90 and .o files:
+if ($backdate_src_o) {
+    back_date($fake_time_o, $src, $obj);
+    backdate_x_files($time_immemorial);
+}
+
+
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+sub find_f90_in_path {
+# Try to find an f90 compiler in our executable PATH, or die.
+
+    my @compilers = qw( f90 f95 g95 gfortran ifort ifc pgf90 );
+    my $fc;
+    foreach my $fcomp (@compilers) {
+        next unless in_PATH($fcomp);
+        $fc = $fcomp; last
+    }
+    if (defined($fc)) {
+        return $fc;
+    } else {
+        die boldface("No F90 compiler found; please set F90_QND_F90\n");
+    }
+}
+# --------------------------------------------------------------------- #
+sub in_PATH {
+# Check whether an executable is available in the execution PATH.
+    my $file = shift;
+
+    my $path;
+    foreach $path (split(/:/,$ENV{PATH})) {
+        if (-x "$path/$file") { return 1; }
+    }
+    return 0;
+}
+# ---------------------------------------------------------------------- #
+sub boldface {
+# Convert string argument to bold face using ANSI terminal sequence,
+# provided STDOUT is connected to a terminal. Set the second argument to
+# enforce boldfacing even for non-terminal output .
+    my $string   = shift();
+    my $force_bf = shift() || 0;
+
+    # Set up start/end markers for boldface
+    my ($bfa,$bfe);
+    my $esc = chr(0x1b);
+    if (-t STDOUT || $force_bf) {  # if STDOUT is connected to a terminal
+        $bfa = "$esc" . '[1m';
+        $bfe = "$esc" . '[0m';
+    } else {
+        $bfa = '';
+        $bfe = '';
+    }
+
+    # Make sure the end marker appears before a newline, or warn/die will
+    # add unwanted line numbers
+    $string =~ s/^(.*)(\n?)$/$bfa$1$bfe$2/;
+
+    return $string;
+}
+# ---------------------------------------------------------------------- #
+sub touch_files_and_exit {
+# Instead of compiling, just touch .f90 and .o file.
+# Assumes the option # `-o file.o' is given on the command line
+    my @fc_args = @_;
+
+    # Extract output file name (cmd line arg aftero the `-o'):
+    while (my $arg = shift @fc_args) {
+        last if $arg eq '-o';
+    }
+    unless (@fc_args) {
+        warn boldface("No -o option found, not touching anything.\n");
+        exit(1);
+    }
+
+    my $outfile = shift @fc_args;
+    if ($outfile =~ /^-.*/) {
+        die boldface("Fatal: -o is followed by an option.\n");
+    }
+
+    # Construct list of files to touch (.o, .f90, .f)
+    my @files;
+    if ($outfile =~ /^(.*)\.o$/) {
+        my $base = $1;
+        push @files, $outfile    if (-e $outfile);
+        push @files, "$base.f90" if (-e "$base.f90");
+        push @files, "$base.f"   if (-e "$base.f");
+    }
+    # else: don't touch anything
+
+    # Touch files
+    my $now = time();
+    back_date($now, @files);
+
+    exit 0;
+}
+# ---------------------------------------------------------------------- #
+sub get_timestamp {
+# Get time stamp of a file.
+    my $file = shift or die boldface("get_ts: need one argument\n");
+
+    #   dev   ino   mode  nlink uid   gid   rdev  size  atime mtime
+    my (undef,undef,undef,undef,undef,undef,undef,undef,undef,$mtime)
+      = stat($file);
+
+    $mtime = time() unless defined($mtime); # default to now for
+                                            # non-existant files
+
+    return $mtime;
+}
+# ---------------------------------------------------------------------- #
+sub get_ts_hash {
+# Takes a list of file names,
+# returns hash of modification time stamps for all files in list.
+     my @files = @_;
+     my %ts_hash;
+
+     foreach my $file (@files) {
+         $ts_hash{$file} = get_timestamp($file);
+     }
+
+     return %ts_hash;
+}
+# ---------------------------------------------------------------------- #
+sub get_md5_hash {
+# Takes a list of file names,
+# returns hash of MD5 sums of all files in list.
+    my @files = @_;
+    my %mod_hash;
+    my $md5;
+
+    foreach my $file (@files) {
+        local $/=undef;
+        open(FILE, "< $file")
+          or die boldface("Cannot open file $file for reading\n");
+        my $data = <FILE>;
+        close FILE;
+        $data = erase_timestamp_from_mod($data,$file);
+        $md5 = md5_hash_hex($data);
+        $mod_hash{$file} = $md5;
+
+        if ($debug > 2) {
+            #
+            # Store copy of mod file that produced Md5 sum, together with
+            # guess of the corresponding .f90 file.
+            #
+            # my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+            my ($sec,$min,$hour,$mday,$mon,$year)
+              = localtime(get_timestamp($file));
+            my $timestamp = "$year$mon$mday.$hour$min$sec";
+            my $fname = "${logdir}/${file}_${timestamp}_${md5}";
+            open(MODFILE, "> $fname") or die "Cannot open $fname for writing\n";
+            print MODFILE $data;
+            close MODFILE;
+
+            # OK, this one is really just a hack I am adapting to the
+            # situation (i.e. to the files I am interested in)
+            my %mod2f90 = (
+                           'farraymanager.mod' => 'farray.f90',
+                           'poisson.mod'       => 'poisson_multigrid.f90',
+                          );
+            my $f90file = $mod2f90{$file} || '';
+            if ($f90file) {
+                # Append the same label as for the module, for easier
+                # identification
+                my $fname = "${logdir}/${f90file}_${timestamp}_${md5}";
+                system('cp', $f90file, $fname) == 0
+                  or warn "Couldn't copy $f90file to $fname: $?\n";
+            }
+        }
+    }
+
+    return %mod_hash;
+}
+# ---------------------------------------------------------------------- #
+sub md5_hash_hex {
+# Given a string, return its MD5 hash in hexadecimal format.
+# Uses Digest::MD5 if that module is available, otherwise calls the
+# system command `md5sum' (which should be available on POSIX or cygwin).
+    my $data = shift;
+
+    if ($md5_implementation eq 'Digest::MD5') {
+        return Digest::MD5::md5_hex($data);
+    } elsif ($md5_implementation eq 'md5sum') {
+        return md5_hash_hex_system($data);
+    } else {
+        die "No working MD5 implementation, tried Digest::MD5 and `md5sum'\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub md5_hash_hex_system {
+# Use the system's `md5sum' function to calculate MD5 hash of a string
+
+    require IPC::Open2;
+
+    my $data = shift;
+
+    my $md5;
+
+    print DEBUG "Piping data to `md5sum'\n" if ($debug);
+    my $pid = IPC::Open2::open2(\*MD5SUM, \*DATA, "md5sum");
+
+    # Need to fork, so we can write and read to/from the same pipe without
+    # risking deadlock for large data sizes
+    if (my $fid=fork) { # parent
+        close DATA;  # don't forget this one
+        if ($debug>=2) { print DEBUG "Parent: Reading from md5sum\n" }
+        $md5 = <MD5SUM>;
+        close MD5SUM; # not necessary, I guess
+        if ($debug>=2) { print DEBUG "Parent: Read from md5sum\n" }
+        waitpid($fid,0); # not really needed her, but avoids zombies
+        if ($debug>=2) { print DEBUG "Parent: Child has finished\n" }
+    } else {            # child
+        die "Cannot fork: $!" unless defined ($fid);
+        if ($debug>=2) { print DEBUG "Child: Writing to md5sum (pid $pid)\n" }
+        close MD5SUM; # apparently not necessary
+        print DATA $data;
+        close DATA;
+        if ($debug>=2) { print DEBUG "Child: Wrote to md5sum\n" }
+        exit;
+    }
+
+    # Strip trailing ` -\n' from md5sum ouptut
+    $md5 =~ s/\s*(\S+).*/$1/s;
+
+    return $md5;
+}
+# ---------------------------------------------------------------------- #
+sub erase_timestamp_from_mod {
+# Erase time stamp in .mod files of known type
+    my $data = shift;
+    my $file = shift;           # file name for diagnostics
+
+    if ($fc_modtype =~ /^(g95|gfortran)$/) {
+        # Eliminate time stamp from ASCII-formatted g95/gfortran module file:
+        # Time stamp line is first line and looks like one of
+        #   G95 module created on Wed Nov 29 18:27:08 2006 from random_nr.f90
+        #   GFORTRAN module created from random_nr.f90 on Wed Nov 29 18:22:38 2006
+        $data =~ s{^((?:G95|GFORTRAN) module created.*? on) .*( from|$)}
+                  {$1 [removed timestamp] $2}m
+                 or warn boldface("No time stamp found in <$file> ...\n");
+        # Note: recent gfortran version (currently I use 4.3-svn) also add
+        # an MD5 sum in the next line (which seems to include the time
+        # stamp somehow), so we need to erase that, too
+        $data =~ s{^MD5:[0-9a-f]+\s*}
+                  {[Removed MD5 sum] }m;
+    } elsif ($fc_modtype =~ /^(ifort|ifc|hp)$/) {
+        # Eliminate time stamp from binary ifort (>=8) module file: Bytes
+        # 49-52 represent Unix time, so we null them out [NB: Apparently
+        # this was 45-48 with older compiler versions, but I cannot
+        # (easily) check]:
+        substr($data,48,4) = "\0\0\0\0";
+        # Exactly same thing for HP Fortran Compiler V5.5A (Tru64/OSF1).
+    } elsif ($fc_modtype =~ /^(generic|mips|sun)$/) {
+        # No time stamp to remove.
+        # IRIX MIPSPro 7.4 compiler: No time stamp
+        # Sun Fortran 95 7.1: No time stamp
+    } else {
+        die boldface("Don't know what to do for module type `$fc_modtype'\n");
+    }
+
+    return $data;
+}
+# ---------------------------------------------------------------------- #
+sub get_ts_and_md5_for_mod {
+# Get time stamps and MD5 hashes of all *.mod files
+    my $ts_ref  = shift;
+    my $md5_ref = shift;
+    my $phase   = (shift || 'Unknown phase');
+
+    my @mod_files = <*.mod>;
+    %$ts_ref  = get_ts_hash( @mod_files);
+    %$md5_ref = get_md5_hash(@mod_files);
+
+    if ($debug > 1) {
+        print DEBUG "$phase:\n", dump_ts_and_md5('  ', $ts_ref, $md5_ref);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub dump_ts_and_md5 {
+#
+# Dump info about all mod files in the form <file.mod> => timestamp md5sum
+#
+    my $prefix  = shift;
+    my $ts_ref  = shift;
+    my $md5_ref = shift;
+
+    # Get and sort all keys (union of all keys from ts amnd md5, but those
+    # should be identical anyway)
+    my @files = keys %{ {%$ts_ref, %$md5_ref} };
+    @files = sort @files;                  # print in alphabetical order
+
+    # Figure out length of longest file name
+    my $maxlen = 0;
+    map { length($_)>$maxlen and $maxlen=length($_) } @files;
+
+    # Print
+    my $output;
+    my $fn_fmt = '%-' . $maxlen . 's';
+    foreach my $file (@files) {
+        $output .=
+          sprintf "%s$fn_fmt => %10s %s\n",
+            $prefix, $file, $ts_ref->{$file}, $md5_ref->{$file};
+    }
+
+    return $output;
+}
+# ---------------------------------------------------------------------- #
+sub get_updated_files {
+# Takes two hash refs { filename => mtime },
+# returns list of all files that have obtained newer mtime in hash 2, or
+# are not in hash 1.
+    my $href1 = shift;
+    my $href2 = shift;
+    my %mtime1 = %$href1;
+    my %mtime2 = %$href2;
+    my @changed;
+
+    foreach my $file (keys %mtime2) {
+        my $t1 = ( $mtime1{$file} || 0 ); # mtime cannot be zero
+        my $t2 =   $mtime2{$file};
+        push @changed, $file if ($t2 > $t1);
+    }
+
+    return @changed;
+}
+# ---------------------------------------------------------------------- #
+sub compile {
+# Run the true compiler
+
+    my $fc     = shift;
+    my @fcargs = @_;
+
+    if ($debug) {
+        print DEBUG "Compiling...\n";
+        print DEBUG "$fc  @fcargs\n";
+    }
+
+    # Clear error variable
+    $! = 0;
+
+    my $retval = system($fc, @fcargs);
+    if ($retval ne 0) {
+        my $msg = "Error during compilation: $fc returned $retval";
+        $msg .= ' ($!=`' . $!. "')" if ($! ne '');
+        die boldface("$msg\n");
+    }
+
+    print DEBUG "..done.\n" if ($debug);
+}
+# ---------------------------------------------------------------------- #
+sub backdate_x_files {
+# Backdate *.x to enforce re-linking
+    my $time = shift();
+
+    my $exec_re = '\.x$';
+    $exec_re = $ENV{F90_QND_EXEC_RE} if (defined($ENV{F90_QND_EXEC_RE}));
+
+    my @all_files = <*>;
+    my @x_files = grep /$exec_re/, @all_files;
+
+    if (@x_files) {
+        print DEBUG "Backdating @x_files\n" if ($debug);
+        back_date($time, @x_files);
+    }
+}
+# ---------------------------------------------------------------------- #
+sub back_date {
+# Change atime and mtime for files
+    my $fake_time = shift;
+    my @files     = @_;
+
+    return 0 unless(@files);
+
+    if (defined($fake_time)) {
+        print DEBUG "Touching ", join(',', @files),
+          " to $fake_time = ", scalar localtime($fake_time), "\n"
+          if ($debug);
+        utime $fake_time, $fake_time, @files
+          or die boldface("Couldn't touch ", join(',', @files), "\n");
+    } else {
+        print DEBUG "Not touching ", join(',', @files),
+          " -- fake_time undefined\n"
+            if ($debug);
+    }
+
+    return scalar @files;       # return number of back-dated files
+}
+# ---------------------------------------------------------------------- #
+sub print_details_of_changes {
+# For each file in @changes, print a line stating whether it has really
+# changed, or not
+    foreach my $mod_file (@changed) {
+        if (grep /^$mod_file$/, @really_changed) {
+            print DEBUG "$mod_file: has changed\n";
+        } else { 
+            print DEBUG "$mod_file: updated, but not changed\n";
+        }
+    }
+}
+# ---------------------------------------------------------------------- #
+
+
+__END__
+
+
+=head1 NAME
+
+B<f90_qnd> - Fast re-compilation of modular F90 codes through foul play
+with mtimes
+
+=head1 SYNOPSIS
+
+   export F90_QND_F90=g95
+   export F90_QND_F90=ifort
+   f90_qnd <f90-arguments>  # (i.e. drop-in replacement for f90 compiler)
+
+
+=head1 DESCRIPTION
+
+This compiler wrapper avoids unnecessary recompilation (the `recompilation
+cascade') by clever back-dating of time stamps for .f90, .o and .mod
+files. `qnd' stands for `quick and dirty'.
+
+B<f90_qnd> ships as part of the Pencil Code
+L<http://www.nordita.dk/software/pencil-code/>, but should also work for
+other modular F90 codes.
+
+The scheme (inspired by g95's `smart compilation feature') works as
+follows:
+
+=over 4
+
+=item 1.
+
+The time stamps of any .mod files that have not really changed
+(same content as before) are back-dated to their values before
+compilation of <file.f90>.
+
+=item 2.
+
+If no .mod files have been really changed or newly created, then
+
+=over 2
+
+=item -
+
+the time stamps of <file>.f90 and <file>.o are reset to the
+pre-compilation time stamp of <file.o>, and
+
+=item -
+
+all xecutable files (by default *.x) are backdated to the golden 1970s to
+ensure they get re-linked.
+
+=back
+
+Thus, if a detail in <file>.f90 is changed that does not affect the
+interface to other files, none of the other source files will get
+recompiled, and only the executables are re-linked against the new
+<file>.o.
+
+=back
+
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item F90_QND_F90
+
+F90 compiler to use.
+
+=item F90_QND_MODTYPE
+
+If the name of your compiler is not recognized (currently only
+/g95|gfortran|ifort|ifc/ are), you need to set this variable to one of the
+supported module types (see the table below).
+
+=item F90_QND_EXEC_RE
+
+When backdating object files, B<f90_qnd> will backdate executables so they
+will get re-linked. An executable in this sense is any file whose name
+matches the Perl regular expression B<F90_QND_EXEC_RE>. The default is
+`\.x$'.
+
+=item F90_QND_DEBUGLEVEL
+
+Set to 1, 2, or 3 to get increasingly more detailed debugging information
+written to the file I<f90_qnd.log> and the directory I<f90_qnd_log_dir>.
+
+=back
+
+
+=head1 SUPPORTED COMPILERS
+
+We have tested B<f90_qnd> successfully with the following compilers:
+
+   Compiler       Version   F90_QND_F90   F90_QND_MODTYPE
+  --------------------------------------------------------
+   G95            0.91      g95           g95
+   Gfortran       4.1.1     gfortran      gfortran
+   Intel          8.1       ifc           ifc
+   Intel          9.1       ifort         ifort
+   HP/Compaq/Dec  5.5A      f90           hp
+   MIPSPro        7.4       f90           mips
+   Sun            7.1       f95           sun
+
+In reality there are way fewer module types than indicated by this table,
+as g95=gfortran (text format, first line contains time stamp; with recent
+versions of gfortran [e.g. 4.3-svn], there is also an MD5 sum on the next
+line that changes with each recompilation),
+ifort=ifc=hp (binary, 4-byte Unix time stamp in bytes 45--48),
+generic=mips=sun ([binary,] no time stamp).
+
+To add more compilers, we need to know where the time stamps (if any) are
+located in the .mod files, so we can mask them out before calculationg MD5
+sums for comparison. The Pencil Code comes with the shell script
+C<utils/get-mod-info> to make it easier to extract the relevant
+information.
+
+See also L<http://www.theochem.uwa.edu.au/fortran/recompile/> for
+information on older compilers' .mod file format (and for other approaches
+to the `recompilation cascade problem').
+
+
+=head2 NOTES ON INDIVIDUAL COMPILERS
+
+=over 4
+
+=item 1.
+
+Apparently, versions of ifort before 9.1 put the time stamp in bytes
+45-48, while 9.1 has it in 49-52, which is what B<f90_qnd> currently masks
+out if F90_QND_MODTYPE=ifort.
+If somebody can confirm this, I will mask out all 8 bytes in question.
+
+=item 2.
+
+Right now (July 2007), gfortran changes the .mod file even when changing
+one or a few lines not related to the module interface.
+Since this happens even when adding a debug print* statement, this may
+render B<f90_qnd> pretty useless with gfortran (or the other way
+around...).
+
+g95 had the same issue, but this is fixed since ~ May 2007.
+
+See L<http://gcc.gnu.org/bugzilla/show_bug.cgi?id=32147> .
+
+=item 3.
+
+Ifort has a similar problem, e.g. after adding a (subroutine-local)
+variable, I found that ifort 9.1 changed two bytes in the .mod files,
+althought the module interface should not have been changed.
+
+This seems to not occur with simpler changes like adding a print* debug
+statement.
+
+=back
+
+
+=head1 NOTES
+
+=over 4
+
+=item 1.
+
+This should work with Makefiles that base dependencies on .o files (not
+really logical for module dependencies, but the only portable option, as
+some compilers do not produce .mod files at all), as well as Makefiles
+with dependencies on .mod files. Only the former has been tested so far.
+
+=item 2.
+
+If the compiler call contains no `-c' option, we assume the compiler was
+called for linking, and no time stamps are manipulated.
+
+=back
+
+
+=head1 AUTHOR
+
+Wolfgang Dobler <Wolfgang [.] Dobler [at] kis.uni-freiburg.de>
+
+
+=head1 COPYRIGHT
+
+(C) 2006  Wolfgang Dobler
+
+This program is free software; you can redistribute and/or modify it
+under the same conditions as Perl (see L<perlgpl> and L<perlartistic>).
+
+=cut
+
+
+# End of file f90_qnd

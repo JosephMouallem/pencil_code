@@ -1,0 +1,108 @@
+1) add Vapor libraries to the IDL DLM path:
+$ export IDL_DLM_PATH="+/path/to/Vapor/lib/:$IDL_DLM_PATH"
+$ export LD_LIBRARY_PATH="/path/to/Vapor/lib/"
+$ idl
+
+2)
+option A) load full volume:
+IDL> pc_read_var_raw, obj=var, tags=tags, varfile='var.dat', dim=dim, grid=grid
+option B) load a subvolume of the inner 256*256 pixels:
+IDL> pc_read_subvol_raw, obj=var, tags=tags, varfile='var.dat', sub_dim=dim, sub_grid=grid, /allprocs, xs=128, xe=128*3-1, ys=128, ye=128*3-1, /addghosts
+
+3) get a quantity (here B_z) and save it as VDF:
+IDL> B_z = pc_get_quantity ('B_z', var, tags, dim=dim, grid=grid)
+IDL> x = pc_get_quantity ('x', var, tags, dim=dim, grid=grid)    
+IDL> y = pc_get_quantity ('y', var, tags, dim=dim, grid=grid)
+IDL> z = pc_get_quantity ('z', var, tags, dim=dim, grid=grid)
+IDL> size_x = pc_get_quantity ('size_x', var, tags, dim=dim, grid=grid)
+IDL> size_y = pc_get_quantity ('size_y', var, tags, dim=dim, grid=grid)
+IDL> size_z = pc_get_quantity ('size_z', var, tags, dim=dim, grid=grid)    
+IDL> size = [size_x, size_y, size_z]
+IDL> origin_x = pc_get_quantity ('origin_x', var, tags, dim=dim, grid=grid) 
+IDL> origin_y = pc_get_quantity ('origin_y', var, tags, dim=dim, grid=grid)
+IDL> origin_z = pc_get_quantity ('origin_z', var, tags, dim=dim, grid=grid)
+IDL> origin = [origin_x, origin_y, origin_z]
+IDL> time = 3780
+IDL> periodic = byte ([1, 1, 0])
+IDL> equidist = periodic
+IDL> pc_save_vdf, 'B_z.vdf', 'B_z', B_z, x, y, z, size, origin, periodic, equidist, time
+
+=========================================================================
+Possibly outdated information:
+
+This directory contains idl routines that can be used with VAPOR.
+See http://www.vapor.ucar.edu/ for VAPOR documentation.
+
+"pc_write_vapor.pro" is an IDL routine that converts a Pencil varfile set to
+a VAPOR VDF file, so that the VAPOR tools can then be applied to the data.
+
+Sample Output
+-------------
+   http://video.google.com/videoplay?docid=-272573806280164847&hl=en
+
+Getting Started
+---------------
+1)
+You need to install VAPOR first:
+
+   http://www.vapor.ucar.edu/
+
+Download it and run vaporinstall.sh, I installed in /opt/vapor.
+Make sure you have /your/install/path/vapor/lib in both
+LD_LIBRARY_PATH and IDL_DLM_PATH, e.g. for a 'sh' or 'bash' shell:
+    export LD_LIBRARY_PATH="/opt/vapor/lib:$LD_LIBRARY_PATH"
+    export IDL_DLM_PATH="/opt/vapor/lib:$IDL_DLM_PATH"
+or for a 'csh'-compatible shell:
+    setenv LD_LIBRARY_PATH "/opt/vapor/lib:$LD_LIBRARY_PATH"
+    setenv IDL_DLM_PATH "/opt/vapor/lib:$IDL_DLM_PATH"
+before starting IDL.
+
+2)
+To generate a VDF-file (default: data/var.vdf) just run "pc_write_vapor"!
+This should write all the variables from varfile.
+
+You can add options like the pc_read_var command, e.g.:
+   variables=['lnrho','ss']
+or
+   variables=['rho','tt'], /magic
+
+You can specify an input varfile:
+   varfile='VAR20'
+or
+   varfile='VAR',ivar=20
+
+Or you can convert a sequence of files:
+   varfile='VAR', ivarmin=1, ivarmax=20
+You can also specify an alternative VDF output file:
+   vdffile='mydata.vdf'
+
+Be aware that this ALWAYS trims the ghost zones off the data!
+More parameters are listed in the header of "pc_write_vapor.pro".
+
+3)
+Then run "vaporgui" with the same environment variables set.
+
+4)
+Go to the "data" menu and click "Load data into the current session".
+(You can do this while IDL still writes the remaining data for a sequence!)
+
+5)
+Play! E.g., go to the "DVR" tab (volume rendering), select a variable,
+enable rendering, and adjust the opacity.
+
+Note:
+If you put multiple varfiles into one VAPOR VDF file,
+you can not switch to the animation tab and hit play.
+For that, you need to store each varfile in separate VDF files.
+
+
+Original Instructions
+---------------------
+
+In a VAPOR IDL session run "pc_write_vapor" with the following arguments:
+the absolute path to the root of the pencil data,
+the number of processors used to create the pencil data,
+the absolute path to the vdf file (created in step 1),
+the timestep being converted optionally, and
+the name of the var files (if it is not "var", as in "var.dat").
+

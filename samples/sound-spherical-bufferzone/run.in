@@ -1,0 +1,39 @@
+!                               -*-f90-*-   (for emacs)
+!
+! Spherical sound wave to demonstrate absorbing boundaries
+! Run parameters
+!
+&run_pars
+   cvsid='$Id$',
+   it1=10, isave=100, itorder=3,
+   tmax=1.5,
+   dsnap=0.2,
+   dvid=0.01, slice_position='m'
+   bcx = 'a','s','s','s','s'
+   bcy = 's','a','s','s','s'
+   bcz = 's','s','a','s','s'
+   border_frac_x = 0.5, 0.5
+   border_frac_y = 0.5, 0.5
+   border_frac_z = 0.5, 0.5
+   lpencil_check=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+  lupw_lnrho=T ! use upwinding for lnrho to avoid wiggles
+/
+&entropy_run_pars
+  lupw_ss=T    ! use upwinding for entropy to avoid wiggles
+/
+&viscosity_run_pars
+  nu=4.e-3
+/
+! Nomenclature for boundary conditions:
+!   Variables are (currently): ux,uy,uz,lam,ent,ax,ay,az
+!   p      : periodic
+!   s/a/a2 : symmetric/antisymmetric/antisymmetric w.r.t. boundary value
+!   s:a2   : bc `s' at lower (left) and `a2' at upper (right) boundary
+! tinit    -- initial time for smoothly switching on heating, etc
+

@@ -1,0 +1,90 @@
+#!/usr/bin/perl
+#======================================================================#
+# Name:   pc_get_param_state
+# Author: Bourdin.KIS
+# Date:   02-Mar-2012
+# SVN:    $Id$
+# Description:
+#    Evaluate 'params.log' and generate a proper 'run.in' for a given time.
+
+use strict;
+
+my $run_file = "run.in";
+my $out_file = "run_<TIME>.in";
+my $par_file = "data/params.log";
+
+my $id = "[a-zA-Z](?:[a-zA-Z0-9_])*"; # allowed namelist/variable identifiers
+
+my $progname = $0;
+$progname =~ s/.*\///s;
+
+my $usage="Usage:  $progname <time>
+Evaluate $par_file and $run_file to generate a run.in file for a given <time>.
+
+Options:
+  -h, --help : This usage overview
+";
+
+if ((@ARGV <= 0) || ($ARGV[0] =~ /^(-h|--help)/)) { die $usage; }
+
+
+my $time = $ARGV[0];
+my $line = "";
+my $log = "";
+my $run = "";
+
+# Read whole par_file and split contents by separator line
+open (LOG, "< ".$par_file) || die ("Can't open file '$par_file'\n");
+while ($line = <LOG>) { $log .= $line; }
+close (LOG);
+
+my @blocks = split (/^\s*[!#]\s*---------------------------------*\s*$/m, $log);
+
+# Drop empty blocks
+@blocks = grep /\S/, @blocks;
+
+# Drop emtpy lines
+@blocks = map { s/^\s*\n//gm; $_ } @blocks;
+
+my $started = 0;
+my $params = "";
+my $block = "";
+my $param = "";
+
+foreach $block (@blocks) {
+
+	# Find requested time and pick corresponding parameter block
+	if ($block !~ /^\s*!\s*t\s*=\s*([\d\.e+\-]+)/im) { next; }
+	if ($1 > $time) { last; }
+	$started = $1;
+	$params = $block;
+}
+
+my $comment = "Reference time: ".$started."\n";
+$out_file =~ s/<TIME>/$started/is;
+if ($params =~ /^\s*!\s*Date\s*:\s*(\S+\s\S+)/im) { $comment .= "Executed on: ".$1."\n"; }
+print $comment;
+$comment =~ s/^/! /gm;
+
+
+# Read whole run_file and split contents by separator line
+open (RUN, "< ".$run_file) || die ("Can't open file '$run_file'\n");
+while ($line = <RUN>) {
+	if ($line =~ /^\s*([^#=\s]+)\s*=/is) {
+		$param = $1;
+		if ($params =~ /^(\s*${param}\s*=.*)$/im) {
+			$line = $1;
+			$line =~ s/[\s,]*$/\n/is;
+		}
+		else { die ("Parse error for parameter '$param'.\n"); }
+	}
+	$run .= $line;
+}
+close (RUN);
+
+open (OUT, "> ".$out_file) || die ("Can't open file '$out_file'\n");
+print OUT $comment.$run;
+close (OUT);
+
+exit (0);
+

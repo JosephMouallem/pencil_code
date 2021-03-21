@@ -1,0 +1,389 @@
+#!/usr/bin/env perl
+#!/bin/sh
+
+#  -*-Perl-*-  (for Emacs)    vim:set filetype=perl:  (for vim)
+#======================================================================#
+#! /Good_Path/perl -w
+# line 17
+
+# Name:   pc_build
+# Author: wd (wdobler [at] gmail [dot] com)
+# Date:   23-Jun-2009
+# SVN: $Id$
+# Description:
+#   Compile the Pencil Code, using settings from the 'Makefile' section in
+#   the appropriate configuration files.
+# Usage:
+#   pc_build [-v|-h]
+#   pc_build [-f <file1,file2,...>] [-H <host_ID>]
+#   pc_build [<options>] [<MAKE_VAR1=val1> [<MAKE_VAR2>=val2 ...]]
+# Options:
+#   -h, --help      This help.
+#   -d, --debug     Show debug output.
+#       --clean     Run 'make clean'.
+#       --cleanall  Run 'pc_setupsrc; make cleanall'.
+#   -f <files>,
+#       --config-files=<files>
+#                   Use the given <files> (a comma-separated list) as
+#                   configuration files, rather than trying to find a
+#                   config file based on a host ID.
+#   -H <id>
+#       --host-id=<id>
+#                   Use the given <id> as host ID.
+#   -i              Show system host ID and exit. This ignores local
+#                   configuration of the host ID via command-line flags,
+#                   environment variables, and 'host-ID' files.
+#   -I              Show all matching host IDs, in the order in which they
+#                   are tried, and exit.
+#   -D, --debug-config
+#                   Show the config files (existing or not) that would be
+#                   read, then exit
+#       --notify    Tell us (audibly and visually) when compilation is done.
+#       --fast      Shortcut for the option FFLAGS+='-O0'.
+#   -p, --previous-flags
+#                   Build with the same flags as the prvious time.
+#   -q, --quiet     Be quiet.
+#   -v, --version   Print version number.
+# Examples:
+#   pc_build
+#       use host ID mechanism to identify the appropriate config file.
+#   pc_build REAL_PRECISION=double
+#       run 'make REAL_PRECISION=double', i.e. compile for double precision
+#   pc_build -f compilers/GNU-GCC_MPI
+#       will use the configuration files
+#       ${PENCIL_HOME}/config/compilers/GNU-GCC.conf and
+#       ${PENCIL_HOME}/config/mpi/default.conf (unless you have analogous
+#       files under ~/.pencil/config to override the ones in ${PENCIL_HOME}).
+#   pc_build -f /home/USER/myconfig
+#       will use the configuration file /home/USER/myconfig.conf if it
+#       exists.
+#   pc_build -H workhorse
+#       will look for, and use the configuration file for host ID
+#       'workhorse'. If no config file is found, pc_build exits with an
+#       error message.
+#   pc_build --debug-config
+#       will not build, but instead helps to choose an appropriate
+#       location for a config file for the given computer
+
+# To do / ideas:
+#   - Allow make-style assignment arguments:
+#       pc_build FC=myf90 FFLAGS+='-O0 -g'
+#   - Allow handing down flags to 'make' with
+#       -Wm,<flag1>,<flag2>,...
+#       --make-flags=<flag1>,<flag2>,...
+#   - Allow setting the search path
+
+# Copyright (C) 2015  Wolfgang Dobler
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the same conditions as Perl or under the GNU General Public
+# License, version 3 or later.
+
+use strict;
+use warnings;
+BEGIN {
+    # Make sure ${PENCIL_HOME}/lib/perl is in the Perl path
+    if (-d "$ENV{PENCIL_HOME}/lib/perl") {
+        unshift @INC, "$ENV{PENCIL_HOME}/lib/perl";
+    } else {
+        if ($0 =~ m!(.*[/\\])!) { unshift @INC, "$1../lib/perl"; }
+    }
+}
+
+use Pencil::Util;
+Pencil::Util::use_pencil_perl_modules(
+    'Pencil::ConfigFinder',
+    'Pencil::ConfigParser'
+    ) or die;
+
+use POSIX qw(strftime);
+use Getopt::Long;
+# Allow for '-Plp' as equivalent to '-P lp' etc:
+Getopt::Long::config("bundling");
+
+my $cmd_name = $0;
+my @all_arguments = @ARGV;
+
+my (%opts);                     # Options hash for GetOptions
+
+## Process command line
+GetOptions(\%opts,
+           qw( -h   --help
+               -d   --debug
+                    --clean
+                    --cleanall
+               -f=s --config-files=s
+               -H=s --host-id=s
+               -i
+               -I
+               -D   --debug-config
+                    --notify
+                    --fast
+               -p   --previous-flags
+               -q   --quiet
+               -v   --version )
+          ) or die "Aborting.\n";
+
+my $debug = ($opts{'d'} || $opts{'debug'} || '');
+if ($debug) {
+    printopts(\%opts);
+    print "\@ARGV = '@ARGV'\n";
+}
+
+if ($opts{'h'} || $opts{'help'})    { die usage();   }
+if ($opts{'v'} || $opts{'version'}) { die version(); }
+
+my $clean        = (              $opts{'clean'}          || '');
+my $cleanall     = (              $opts{'cleanall'}       || '');
+my $config_files = ($opts{'f'} || $opts{'config-files'}   || undef);
+my $host_id      = ($opts{'H'} || $opts{'host-id'}        || undef);
+my $debug_config = ($opts{'D'} || $opts{'debug-config'}   || '');
+my $show_system_host_id = ($opts{'i'}                     || '');
+my $show_host_ids = ($opts{'I'}                           || '');
+my $notify       = (              $opts{'notify'}         || '');
+my $fast         = (              $opts{'fast'}           || '');
+my $prev_flags   = ($opts{'p'} || $opts{'previous-flags'} || '');
+my $quiet        = ($opts{'q'} || $opts{'quiet'}          || '');
+
+if ($show_system_host_id) {
+    my $id = Pencil::ConfigFinder::get_host_id_system_info();
+    print $id."\n";
+    exit 0;
+}
+
+if ($show_host_ids) {
+    foreach my $id (Pencil::ConfigFinder::get_host_ids()) {
+        print $id."\n";
+    }
+    exit 0;
+}
+
+my @config_files;
+mention($Pencil::ConfigFinder::debug);
+$Pencil::ConfigFinder::debug = 1 if ($debug or $debug_config);
+if (defined $config_files) {
+    my @files = split(/[,\s\+]+/s, $config_files);
+    @config_files = Pencil::ConfigFinder::locate_config_files(@files);
+} else {
+    my $config_file;
+    if (defined $host_id) {
+        $config_file = Pencil::ConfigFinder::find_config_file_for_host($host_id);
+    } else {
+        $config_file = Pencil::ConfigFinder::find_config_file()
+    }
+    die "Fatal: Couldn't find config file.\n" unless (defined $config_file);
+    push @config_files, $config_file;
+    print STDERR "Found config file <$config_files[0]>\n" unless ($quiet);
+}
+die "No configuration file found\n" unless @config_files;
+
+if ($debug_config) {
+    if (($opts{'f'} || $opts{'config-files'}) && @config_files) {
+        print "Using <";
+        print @config_files;
+        print ">\n";
+    }
+    # The desired output is now printed
+    exit 0;
+}
+
+my $log_file = '.pc_build_history';
+my $new_log_file;
+if ($prev_flags) {
+    exec('sh', $log_file);
+} else {
+    $new_log_file = log_command_line($cmd_name, \@all_arguments);
+}
+
+if ($fast) {
+    push @ARGV, 'FFLAGS+=-O0';
+}
+
+my @extra_make_args = @ARGV;
+
+if ($cleanall) {
+    system('pc_setupsrc');
+    make('cleanall');
+    exit 0;
+}
+
+if ($clean) {
+    make('clean');
+    exit 0;
+}
+
+my $parser = new Pencil::ConfigParser(@config_files);
+$parser->debug(1) if ($debug);
+
+unless (-d './src/scripts') {
+    print STDERR "Running pc_setupsrc\n";
+    system('pc_setupsrc');
+}
+
+my @make_args = @{$parser->get_makefile_args()};
+push @make_args, @extra_make_args;
+
+# Handle MAKE_VAR1=-j4, etc.
+# NOTE: This should be implemented with -Wm,<options>, akin to
+# pencil-test's -Wa or gcc's -Wl options
+map { s/^\s*MAKE_VAR\d*\s*=\s*// } @make_args;
+
+print STDERR "Running make '", join("' '", @make_args, 'default_to_be'), "'\n"
+  unless ($quiet);
+
+make(@make_args, 'default_to_be');
+
+
+# ---------------------------------------------------------------------- #
+sub make {
+# Run 'make' with the given arguments
+    my @make_args = @_;
+
+    system('make', @make_args) == 0
+      or die "'make @make_args' failed: <$!>\n";
+}
+# ---------------------------------------------------------------------- #
+sub mention {
+# Reference a variable without doing anything.
+# Use this to suppress ''Name "Pencil::ConfigFinder::debug" used only
+# once'' warning
+    my @args = @_;
+}
+# ---------------------------------------------------------------------- #
+sub log_command_line {
+# Write the current command line to log file that can be run in order to
+# compile with exactly the same parameters.
+    my ($cmd, $args_ref) = @_;
+    my @args = quote_spaces(@$args_ref);
+
+    my ($out, $tmp_file) = comment_out_all_lines($log_file);
+
+    print $out "#\n";
+    my $timestamp = POSIX::strftime("%Y-%m-%d %H:%M:%S", localtime);
+    print $out "# ", $timestamp, "\n";
+    print $out "$cmd @args", "\n";
+    close $out;
+
+    return $tmp_file
+}
+# ---------------------------------------------------------------------- #
+sub comment_out_all_lines {
+# Create a new file.
+# If $log_file exists, copy each line from $log_file to the new file,
+# commenting out all non-empty, non-commented lines.
+# Otherwise write a descriptive header to the new file.
+# Access permissions of the new files are the same as for the old file,
+# or determined from the user's umask.
+# Return a file handle and the file name for the new file.
+    my ($log_file) = @_;
+
+    use File::Temp qw/ :mktemp /;
+
+    my ($out, $tmp_file) = mkstemp('pc_build_tmp_XXXXX');
+
+    my $permissions;
+    if (-e $log_file) {
+        $permissions =  (stat "$log_file")[2] & 07777;
+        open(my $in, '<', $log_file)
+          or return warn_politely("Cannot read from $log_file");
+        while (defined(my $line = <$in>)) {
+            if ($line =~ /^\s*[^#\s]/) {
+                $line = "# $line";
+            }
+            print $out $line;
+        }
+        close $in;
+    } else {
+        # r--r--r-- is 0666, but umask may disallow some of those bits
+        $permissions = 0666 & ~umask();
+        (my $header = <<'HERE') =~ s/^\s{8}//gm;
+        # This file is automatically updated each time you run pc_build.
+        # Use
+        #   pc_build --previous-flags
+        # or
+        #   sh .pc_build_history
+        # to compile with the same flags as you used the previous time.
+HERE
+        print $out $header;
+    }
+
+    chmod($permissions, $out);
+
+    return ($out, $tmp_file);
+}
+# ---------------------------------------------------------------------- #
+sub warn_politely {
+# Print a warning and return ''
+    my ($warning) = @_;
+
+    chomp $warning;
+    warn "$warning\n";
+    return '';
+}
+# ---------------------------------------------------------------------- #
+sub quote_spaces {
+# Put any string containing spaces in ''.
+# This is primitive and won't help for command line arguments containing
+# the single quote character.
+    my @strings = @_;
+
+    my @quoted = ();
+    foreach my $string (@strings) {
+        if ($string =~ /\s/) {
+            $string = "'$string'";
+        }
+        push @quoted, $string;
+    }
+
+    return @quoted;
+}
+# ---------------------------------------------------------------------- #
+sub printopts {
+# Print command line options
+    my ($optsref) = @_;
+    my %opts = %$optsref;
+    foreach my $opt (keys(%opts)) {
+        print STDERR "\$opts{$opt} = '$opts{$opt}'\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub usage {
+# Extract description and usage information from this file's header.
+    my $thisfile = __FILE__;
+    local $/ = '';              # Read paragraphs
+    open(FILE, "< $thisfile") or die "Cannot open $thisfile\n";
+    while (<FILE>) {
+        # Paragraph _must_ contain 'Description:' or 'Usage:'
+        next unless /^\s*\#\s*(Description|Usage):/m;
+        # Drop 'Author:', etc. (anything before 'Description:' or 'Usage:')
+        s/.*?\n(\s*\#\s*(Description|Usage):\s*\n.*)/$1/s;
+        # Don't print comment sign:
+        s/^\s*# ?//mg;
+        last;                        # ignore body
+    }
+    return $_ || "<No usage information found>\n";
+}
+# ---------------------------------------------------------------------- #
+sub version {
+# Return CVS data and version info.
+    my $doll='\$';              # Need this to trick CVS
+    my $cmdname = (split('/', $0))[-1];
+    my $rev = '$Revision: 1.12 $';
+    my $date = '$Date: 2008/07/07 21:37:16 $';
+    $rev =~ s/${doll}Revision:\s*(\S+).*/$1/;
+    $date =~ s/${doll}Date:\s*(\S+).*/$1/;
+
+    return "$cmdname version $rev ($date)\n";
+}
+# ---------------------------------------------------------------------- #
+END {
+    if (defined $new_log_file) {
+        rename $new_log_file, $log_file
+          or warn "Cannot rename $new_log_file to $log_file\n";
+    }
+
+    Pencil::Util::notify('building') if $notify;
+}
+# ---------------------------------------------------------------------- #
+
+# End of file build

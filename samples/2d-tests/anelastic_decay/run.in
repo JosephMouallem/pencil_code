@@ -1,0 +1,24 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Runtime parameters for the anelastic decay problem
+!
+&run_pars
+  cvsid='$Id: run.in,v 1.2 2010-01-08 17:34:56 piyali Exp $'
+  nt=100, it1=1, itorder=3,
+  dsnap=1.0, dvid=0.2, 
+  lread_aux=T
+/
+&eos_run_pars
+  lanelastic_lin=F,lanelastic_full=T
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&grav_run_pars
+/
+&poisson_run_pars
+/
+&viscosity_run_pars
+  nu=1e-3, ivisc='rho-nu-const'
+/

@@ -1,0 +1,652 @@
+#!/bin/sh
+#                      pc_setupsrc
+#                     -------------
+# Description:
+#   Link files into a local src directory
+#   Also link script files from the bin directory ==> should be renamed
+#
+# CVS:
+#   $Id$
+#
+# Usage:
+#   pc_setupsrc [options] [src-dir]
+# Options:
+#   --pencil-home <dir>   Specify the root path of the Pencil Code directory
+#
+IAM=$0
+#
+link_scripts()
+{
+  echo "Linking job submission/execution scripts."
+  to_link=
+  for script in $scripts
+  do
+    if [ -f $bindir/$script ]; then
+      [ -h ./$script ] && rm -f $script
+      [ ! -f ./$script ] && to_link="$to_link $bindir/$script"
+    else
+      echo "No such file: $bindir/$script"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+}
+#
+link_root_makefile()
+{
+## Make a link to a root Makefile to allow make from the run directory
+  [ -h Makefile ] && rm -f Makefile
+  [ ! -f Makefile ] && ln -s $srcdir/Makefile.parent Makefile
+  echo Linked root Makefile.
+}
+#
+#-----------------------------------------------------------------------------
+make_src_dir()
+{
+## src subdirectory
+  if [ ! -d $src ]; then
+    echo "No src directory found: creating new one (`pwd`/src)."
+    mkdir $src
+  fi
+}
+#
+link_src_files()
+{
+#
+#  LINK all *.f90, *.f, and the Makefile to local src directory
+#
+  echo "Linking files in '$src'."
+  old_dir="`pwd`"
+  cd $src
+  n=0
+  to_link=
+  for file in $srcdir/*.f90 $srcdir/*.f $srcdir/*.c \
+              $srcdir/Makefile.src $srcdir/Makefile.depend \
+              $srcdir/Makefile.library $srcdir/Makefile.machine \
+              $srcdir/*.h $srcdir/scripts $srcdir/*.sed $srcdir/.cvsignore
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_special_dir()
+{
+## src subdirectory
+  [ -h $src/special ] && rm $src/special
+  if [ ! -d $src/special ]; then
+    echo "No special directory found: creating new one (`pwd`/src/special)."
+    mkdir $src/special
+  fi
+}
+#
+link_special_files()
+{
+#
+#  LINK all *.f90, *.f, and the Makefile to local src directory
+#
+  echo "Linking files in '$src/special'."
+  old_dir="`pwd`"
+  cd $src/special
+  n=0
+  to_link=
+  for file in $srcdir/special/*.f90
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_pre_and_post_processing_dir()
+{
+## pre- and post-processing subdirectory
+  [ -h $src/pre_and_post_processing ] && rm $src/pre_and_post_processing
+  if [ ! -d $src/pre_and_post_processing ]; then
+    echo "No pre_and_post_processing directory found: creating new one (`pwd`/src/pre_and_post_processing)."
+    mkdir $src/pre_and_post_processing
+  fi
+}
+#
+link_pre_and_post_processing_files()
+{
+#
+#  LINK all *.f90 files to the local src directory
+#
+  echo "Linking files in '$src/pre_and_post_processing'."
+  old_dir="`pwd`"
+  cd $src/pre_and_post_processing
+  n=0
+  to_link=
+  for file in $srcdir/pre_and_post_processing/*.f90
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_inactive_dir()
+{
+## src subdirectory
+  [ -h $src/inactive ] && rm $src/inactive
+  if [ ! -d $src/inactive ]; then
+    echo "No inactive directory found: creating new one (`pwd`/src/inactive)."
+    mkdir $src/inactive
+  fi
+}
+#
+link_inactive_files()
+{
+#
+#  LINK all *.f90, *.f, and the Makefile to local src directory
+#
+  echo "Linking files in '$src/inactive'."
+  old_dir="`pwd`"
+  cd $src/inactive
+  n=0
+  to_link=
+  for file in $srcdir/inactive/*.f90
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_experimental_dir()
+{
+## src subdirectory
+  [ -h $src/experimental ] && rm $src/experimental
+  if [ ! -d $src/experimental ]; then
+    echo "No experimental directory found: creating new one (`pwd`/src/experimental)."
+    mkdir $src/experimental
+  fi
+}
+#
+link_experimental_files()
+{
+#
+#  LINK all *.90 to the local src directory
+#
+  echo "Linking files in '$src/experimental'."
+  old_dir="`pwd`"
+  cd $src/experimental
+  n=0
+  to_link=
+  for file in $srcdir/experimental/*.*
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_magnetic_dir()
+{
+## src subdirectory
+  [ -h $src/magnetic ] && rm $src/magnetic
+  if [ ! -d $src/magnetic ]; then
+    echo "No magnetic directory found: creating new one (`pwd`/src/magnetic)."
+    mkdir $src/magnetic
+  fi
+}
+#
+link_magnetic_files()
+{
+#
+#  LINK all *.* to local src directory
+#
+  echo "Linking files in '$src/magnetic'."
+  old_dir="`pwd`"
+  cd $src/magnetic
+  n=0
+  to_link=
+  for file in $srcdir/magnetic/*.*
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_test_methods_dir()
+{
+## src subdirectory
+  [ -h $src/test_methods ] && rm $src/test_methods
+  if [ ! -d $src/test_methods ]; then
+    echo "No test_methods directory found: creating new one (`pwd`/src/test_methods)."
+    mkdir $src/test_methods
+  fi
+}
+#
+link_test_methods_files()
+{
+#
+#  LINK all *.* to local src directory
+#
+  echo "Linking files in '$src/test_methods'."
+  old_dir="`pwd`"
+  cd $src/test_methods
+  n=0
+  to_link=
+  for file in $srcdir/test_methods/*.*
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+}
+#
+#-----------------------------------------------------------------------------
+make_initial_condition_dir()
+{
+## src subdirectory
+  [ -h $src/initial_condition ] && rm $src/initial_condition
+  if [ ! -d $src/initial_condition ]; then
+    echo "No initial_condition directory found: creating new one (`pwd`/src/initial_condition)."
+    mkdir $src/initial_condition
+  fi
+}
+#
+link_initial_condition_files()
+{
+#
+#  LINK all *.f90, *.f, and the Makefile to local src directory
+#
+  echo "Linking files in '$src/initial_condition'."
+  old_dir="`pwd`"
+  cd $src/initial_condition
+  n=0
+  to_link=
+  for file in $srcdir/initial_condition/*.f90
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+  cd $old_dir
+#
+#-----------------------------------------------------------------------------
+#  Local initial condition subroutines can be saved in initial_condition
+#  folder in run directory.
+#
+  if [ -d "$old_dir/initial_condition" ]; then
+    echo "Linking files in '$old_dir/initial_condition'."
+    ln -fs $old_dir/initial_condition/* $src/initial_condition/
+  fi
+}
+#
+make_cuda_dir()
+{
+## cuda subdirectory
+  [ -h $src/cuda ] && rm $src/cuda
+  adddir $src/cuda
+## cuda/src_new subdirectory
+  [ -h $src/cuda/src_new ] && rm $src/cuda/src_new
+  adddir $src/cuda/src_new
+## subdirectories of src_new
+  adddir $src/cuda/src_new/utils
+  adddir $src/cuda/src_new/common
+  adddir $src/cuda/src_new/gpu
+  adddir $src/cuda/src_new/diagnostics
+  adddir $src/cuda/src_new/gpu/cuda
+  adddir $src/cuda/src_new/gpu/cuda/core
+  adddir $src/cuda/src_new/gpu/cuda/generic
+}
+#
+adddir()
+{
+  if [ ! -d $1 ]; then
+    echo "No ${1##*/} directory found: creating new one (`pwd`/$1)."
+    mkdir $1
+  fi
+}
+#
+link_cuda_files()
+{
+#
+#  LINK all *.* to local src/cuda directory
+#
+  echo "Linking files in '$src/cuda'."
+  old_dir="`pwd`"
+  cd $src/cuda
+  n=0
+  to_link=
+  for file in $srcdir/cuda/src/*.cu $srcdir/cuda/src/*.cuh $srcdir/cuda/src/*.cpp $srcdir/cuda/src/*.h $srcdir/cuda/src/makefile $srcdir/cuda/src/makefile.* $srcdir/cuda/src/*.conf 
+  do
+    if [ -f $file ] || [ -d $file ]; then
+      if [ -h "`basename $file`" ]; then
+        rm -f "`basename $file`"
+        to_link="$to_link $file"
+        #ln -s $file .
+      elif [ -f "`basename $file`" ] \
+        || [ -d "`basename $file`" ]; then
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      else
+        to_link="$to_link $file"
+        #ln -s $file .
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_link" ] && ln -s $to_link .
+
+  echo "Linking files in '$src/cuda/src_new'."
+  cd $src/cuda/src_new
+  to_link=
+  len=`expr match "$srcdir/cuda/src_new/" '.*src_new/'`
+  for file in $srcdir/cuda/src_new/*.cc $srcdir/cuda/src_new/*.txt $srcdir/cuda/src_new/Makefile* $srcdir/cuda/src_new/utils/*.h $srcdir/cuda/src_new/common/*.cc $srcdir/cuda/src_new/common/*.txt $srcdir/cuda/src_new/common/*.h $srcdir/cuda/src_new/gpu/*.cc $srcdir/cuda/src_new/gpu/*.txt $srcdir/cuda/src_new/gpu/*.h $srcdir/cuda/src_new/diagnostics/*.h $srcdir/cuda/src_new/diagnostics/*.cc $srcdir/cuda/src_new/gpu/cuda/*.cu* $srcdir/cuda/src_new/gpu/cuda/core/*.cu* $srcdir/cuda/src_new/gpu/cuda/generic/*.cu*
+  do
+    file_for_link $file
+  done
+  for file in $to_link
+  do 
+#    ln -s $file ${file:$len}
+    ln -s $file `echo $file | sed -r 's/^.*src_new\///'`
+  done
+
+  cd $old_dir
+}
+#
+file_for_link()
+{
+    if [ -f $1 ] || [ -d $1 ]; then
+#      relname=${1:$len}
+      relname=`echo $file | sed -r 's/^.*src_new\///'`
+      if [ -h $relname ]; then
+        rm -f $relname
+        to_link="$to_link $1"
+      elif [ ! -f $relname ] \
+        && [ ! -d $relname ]; then
+        to_link="$to_link $1"
+      fi
+    else
+      echo "No such file: $1"
+    fi
+}
+#
+create_Makefile_inc()
+{
+#
+#  Create empty src/Makefile.inc, so `make' does not complain about its
+#  absence when run for the first time
+#
+  printf "# %s\n" "Empty" "(This file was written by 'pc_setupsrc')" \
+      > src/Makefile.inc
+  printf "# %s\n" "Empty" "(This file was written by 'pc_setupsrc')" \
+      > src/Makefile-standard.inc
+}
+#
+copy_local_files()
+{
+#
+#  COPY all *.local files into local src directory
+#
+  echo "Creating .local files in $src (if necessary)."
+  old_dir="`pwd`"
+  cd $src
+  n=0
+  to_copy=
+  for file in $srcdir/*.local
+  do
+    if [ -f $file ]; then
+      if [ ! -f "`basename $file`" ]; then
+# Warn user about copying *.local, as these should normally come
+# with each run directory:
+        echo "Copying default file $file to src/ -- are you sure this is OK?"
+        to_copy="$to_copy $file"
+        #cp $file .
+      else
+        # echo "`basename $file` already exists"
+        n="`expr $n + 1`"
+        existf="$existf`basename $file` "
+      fi
+    else
+      echo "No such file: $file"
+    fi
+  done
+  [ "$to_copy" ] && cp $to_copy .
+  cd $old_dir
+}
+#
+print_status()
+{
+  [ $n -eq 1 ] &&  echo "$existf already existed in $src"
+  [ $n -gt 1 ] && echo "$n files already existed in $src"
+}
+#
+remove_broken_links()
+{
+## Remove any broken links...
+  find . $src -type l 2>/dev/null | perl -lne 'unlink $_ if (-l && ! -e)'
+}
+#
+prepare_for_compile()
+{
+#
+#  Generate Makefile
+#
+  echo "Rebuilding Makefile from Makefile.src."
+  old_dir="`pwd`"
+  cd $src
+  rm -f Makefile                        # for old run directories
+  rm -f makefile                        # for old run directories
+  $srcdir/scripts/adapt-mkfile Makefile.src Makefile
+  cd $old_dir
+  hn=`hostname`
+  if [ "$hn" = emil-login2.pdc.kth.se ]; then
+      touch FAKE_PARALLEL_IO
+  fi
+}
+#
+scripts="start.csh start_run.csh run.csh getconf.csh"
+pencil_home_path=$PENCIL_HOME
+src="`pwd`/src"
+#
+while [ $# -gt 0 ]
+do
+  case $1 in
+  -h)
+    . $pencil_home_path/lib/sh/functions.sh
+    usage_from_header $IAM
+    exit 1
+  ;;
+  -?)
+    . $pencil_home_path/lib/sh/functions.sh
+    usage_from_header $IAM
+    exit 1
+  ;;
+  --help)
+    . $pencil_home_path/lib/sh/functions.sh
+    usage_from_header $IAM
+    exit 1
+  ;;
+  --pencil-home)
+    pencil_home_path=$2
+    shift
+  ;;
+  --)
+    shift
+    break
+  ;;
+  *)
+    if [ $specified_src ]; then
+      echo UNRECOGNISED PARAMETER
+      usage_from_header $IAM
+      exit 1
+    fi
+    src=$1
+  ;;
+  esac
+  shift
+done
+#
+. $pencil_home_path/lib/sh/functions.sh
+#
+if [ ! "$pencil_home_path" ]; then
+  echo " You need to provide the path to the Pencil Code, either via the"
+  echo " --pencil-home option or you need to set PENCIL_HOME; "
+  echo " consider sourcing sourceme.{,c}sh"
+  exit 1
+fi
+#
+bindir=$pencil_home_path/bin
+srcdir=$pencil_home_path/src
+#
+echo "Files will be linked to the root code directory '$pencil_home_path'."
+#
+remove_broken_links
+link_scripts
+link_root_makefile
+make_src_dir
+link_src_files
+make_special_dir
+link_special_files
+make_pre_and_post_processing_dir
+link_pre_and_post_processing_files
+make_magnetic_dir
+link_magnetic_files
+make_test_methods_dir
+link_test_methods_files
+make_inactive_dir
+link_inactive_files
+make_experimental_dir
+link_experimental_files
+make_initial_condition_dir
+link_initial_condition_files
+if [ -f "$src/Makefile.local" ]; then
+  if [ "`grep '^[^#]*= *gpu' $src/Makefile.local`" != "" ]; then 
+    make_cuda_dir
+    link_cuda_files
+  fi
+fi
+create_Makefile_inc
+#copy_local_files
+print_status
+prepare_for_compile

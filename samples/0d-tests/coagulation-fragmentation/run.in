@@ -1,0 +1,31 @@
+!
+!  Run parameters for MRI turbulence
+!
+&run_pars
+  cvsid='$Id$',
+  nt=100, it1=10, cdt=0.4, cdtv=0.4, isave=1000, itorder=3
+  dsnap=1.0e37, dvid=1.0, dtmin=1e-9
+  ! pencil check always fails in 'coagulation_fragmentation', therefore:
+  lpencil_check=F
+  lpencil_check_small=F
+  dtmax=1.0e9
+/
+&eos_run_pars
+/
+&density_run_pars
+/
+&pscalar_run_pars
+  lupw_lncc=T
+/
+&particles_run_pars
+  beta_dPdr_dust=-0.1
+  ldragforce_dust_par=F, ldragforce_gas_par=F
+/
+&particles_radius_run_pars
+  cdtps=0.2
+  lsweepup_par=T
+/
+&particles_number_run_pars
+  cdtpf=0.2
+  lfragmentation_par=T
+/

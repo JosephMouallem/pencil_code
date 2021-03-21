@@ -1,0 +1,25 @@
+#!/bin/sh
+#$Id$
+#
+#  Example:
+#     copy-var-to-var ../hydro256e
+#  Copies all var.dat files from current directory to var.dat in
+#  another run directory.
+#  Used for restarting in a different directory.
+
+procdirs="`\ls data | grep proc`"
+echo $procdirs
+for proc in $procdirs
+do
+  echo "cp data/$proc/var.dat $1/data/$proc"
+  cp data/$proc/var.dat $1/data/$proc
+  if [ -e "data/$proc/pvar.dat" ]; then
+    echo "cp data/$proc/pvar.dat $1/data/$proc"
+    cp data/$proc/pvar.dat $1/data/$proc
+  fi
+  if [ -e "data/$proc/spvar.dat" ]; then
+    echo "cp data/$proc/spvar.dat $1/data/$proc"
+    cp data/$proc/spvar.dat $1/data/$proc
+  fi
+done
+

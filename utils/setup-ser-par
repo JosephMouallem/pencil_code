@@ -1,0 +1,153 @@
+#!/bin/csh
+#                       setup-ser-par
+#                      ---------------
+# Description:
+#   Set up the present run directory for comparing serial and parallel
+#   runs for the same parameters.
+# Usage:
+#   setup-par [-c|-r]
+# Options:
+#   -c, --compile :  compile
+#   -r, --revert  :  revert to original state (i.e. undo a previous
+#                    setup-ser-par)
+# Typical usage:
+#   setup-par
+#   setup-par -c
+#   run-ser-par
+#   idl
+#     @read-ser-par
+
+
+# On some systems (Mhd machine), scripts like this don't inherit the PATH
+setenv PATH ${PATH}:${PENCIL_HOME}/bin:${PENCIL_HOME}/utils
+
+if ($#argv > 0) then
+  switch("$1")
+
+    case '-r':
+    case '--revert':
+      goto revert
+    breaksw
+    
+    case '-c':
+    case '--compile':
+      echo "Compiling.."
+      (cd src-ser; make) && (cd src-par; make)
+      echo "Done."
+      goto exit
+    breaksw
+
+    default:
+      goto usage
+  endsw
+endif
+
+# Are we in a run directory?
+if (! -e ./start.in) goto usage
+
+# Save original src/ directory
+if (-d src) then
+  if (-d src-orig) then
+    echo "Inconsistency: Remove either src/ or src-orig/"
+    exit 1
+  else
+    mv src src-orig
+  endif
+endif
+
+# Create and set up src-ser/ and src-par/
+foreach label (ser par)
+  if (-d "src-$label") then
+    echo "src-$label/ already exists.. leaving it alone"
+  else
+    if ($label == par) then
+      set ncpus  = 4
+      set nprocy = 2
+    else
+      set ncpus  = 1
+      set nprocy = 1
+    endif
+    set nprocz = `expr $ncpus / $nprocy`
+    cp -rp src-orig src-$label
+    rm -rf src-$label/CVS		# mustn't copy CVS subdirectory
+    pc_setupsrc src-$label
+    # Set mpi and mpio for src-$label:
+    perl -i -p -e 's/MPICOMM\s*=\s*nompicomm/MPICOMM   =   mpicomm/;' \
+               -e 's/IO\s*=\s*io.*/IO        =   io_mpio/;' \
+	       src-$label/Makefile.local
+    perl -i -p -e "s/ncpus=[0-9]+/ncpus=$ncpus/;" \
+               -e "s/nprocy=[0-9]+/nprocy=$nprocy/;" \
+	       -e "s/nprocz=[0-9]+/nprocz=$nprocz/;" \
+	       src-$label/cparam.local
+    (cd src-$label; make makefile)
+  endif
+  # MPIO doesn't work under lam
+  perl -i.bak -pe 's{/lam/}{/mpich/}g' src-$label/makefile
+end
+
+## Move and set up data directories
+if (-d data) then
+  if (-d data-orig) then
+    echo "Inconsistency: Remove either data/ or data-orig/"
+    exit 1
+  else
+    mv data data-orig
+    if (! -d data-orig/ser) mkdir data-orig/data-ser
+    if (! -d data-orig/par) mkdir data-orig/data-par
+    if (! -e data-ser) then
+      ln -s data-orig/data-ser .
+    else
+      echo "data-ser/ already exists.. leaving alone"
+    endif
+    if (! -e data-par) then
+      ln -s data-orig/data-par .
+    else
+      echo "data-par/ already exists.. leaving alone"
+    endif
+  endif
+endif
+
+goto exit
+
+# ---------------------------------------------------------------------- #
+revert:
+
+echo "Cleaning up.."
+
+## src directories
+if (-d src) then
+  echo "Warning: src exists; won't touch src-XXX directories"
+else
+  if (-d src-orig) then
+    mv src-orig src
+    rm -rf src-{ser,par}
+  else
+    echo "Warning: can't find src-orig directory; won't touch src-XXX directories"
+  endif
+endif
+
+## data directories
+if (-d data) then
+  echo "Warning: data exists; won't touch data-XXX directories"
+else
+  if (-d data-orig) then
+    mv data-orig data
+    rm -rf data/data-{ser,par}/	# (data-ser was subdirectory of /data-orig)
+    rm -f data-{ser,par}	# (should be links)
+  else
+    echo "Warning: can't find data-orig directory; won't touch data-XXX directories"
+  endif
+endif
+
+echo "Done."
+
+goto exit
+
+# ---------------------------------------------------------------------- #
+usage:
+
+echo "Usage:  setup-ser-par [-c|-r]"
+echo "Set up a run directory for comparison of serial and parallel run"
+
+
+exit:

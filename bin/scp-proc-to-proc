@@ -1,0 +1,52 @@
+#!/bin/csh
+#$Id$
+#
+#  Purpose:
+#      copies directory trees to another machine
+#
+#  Examples:
+#
+#  to copy from here to another machine
+#
+#   scp-proc-to-proc dim.dat $nor52/pencil-code/axel/forced/kf8_helical/512_kf3_Pm20c .
+#   scp-proc-to-proc dim.dat $tri/pencil-code/axel/forced/LSrot/256om0a .
+# scp-proc-to-proc dim.dat $nor52/pencil-code/hubbard/eikonal/3d/576x576x192o .
+# scp-proc-to-proc dim.dat $ekhi/pencil-code/axel/disc/radiation/3D/MCV288_h1em5d4_S10_nu5em2_eta5em2a_noheat2
+# scp-proc-to-proc dim.dat $ekhi/pencil-code/mohira/forced/spherical_surface/144x288x72e_rep3
+# scp-proc-to-proc dim.dat $ekhi/pencil-code/jenny/chiral_fluids/turbulent_decay/288_3D_kf60_mu040_lambda1e11d_double .
+#
+#  to copy from another machine to here
+#
+#   scp-proc-to-proc dim.dat . $dcsc/pencil-code/axel/MRIexp/128d
+#   scp-proc-to-proc dim.dat . $ekhi/pencil-code/axel/disc/radiation/3D/MCV288_h1em5d4_S3
+#   scp-proc-to-proc dim.dat . $ekhi/pencil-code/axel/disc/radiation/3D/MCV288_h1em5d4_S3
+#  scp-proc-to-proc dim.dat . $ekhi/pencil-code/axel/meanfield/cylindrical/oscil/axi576x320_9pix5pi_B005a2
+
+#  will copy all var.dat files from current directory to var.dat in
+#  another run directory.
+#  Used for restarting in a different directory.
+#  Added 4th argument for skipping over $skip counts
+
+if ($#argv == 4) then
+  set skip=$4
+else
+  set skip=0
+endif
+
+# set counter
+set counter="1"
+
+set procdirs  =  `ls data | grep proc `
+foreach proc ($procdirs)
+  if ( $counter >= $skip ) then
+
+# create subdirectories proc*, no message if already existing
+    nohup ssh $2:s/:/ mkdir //data/$proc >& /dev/null
+
+    echo "scp $3/data/$proc/$1 $2/data/$proc"
+    nohup scp $3/data/$proc/$1 $2/data/$proc &
+    sleep .2
+  endif
+  set counter = `expr $counter + 1`
+  echo "counter=$counter"
+end

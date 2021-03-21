@@ -1,0 +1,20 @@
+Directory:
+    ${PENCIL_HOME}/samples/MRI-turbulence_hyper_strict
+SVN Id:
+    $Id$
+Maintainer:
+    Anders Johansen <anders/astro.lu.se>
+Added:
+    23.08.2007
+Status:
+    succeeds # One of [succeeds|failing since <date>|obsolete| ...]
+Recommended resolution:
+    128x128x128 (diffrho_hyper3=eta_hyper3=diffnd_hyper3=nu_hyper3=5.0e-13)
+Comments:
+    This sample uses a stricter version of hyperviscosity and hyperresistivity
+    than ${PENCIL_HOME}/samples/MRI-turbulence_hyper, with positive definite
+    kinetic energy dissipation.
+References:
+    Haugen N. & Brandenburg A.: 2004, ``Inertial range scaling in numerical
+    turbulence with hyperviscosity'', Physical Review E, vol. 70, Issue 2, id.
+    026405

@@ -1,0 +1,26 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+!  run parameters for forced helical MHD turbulence
+!
+&run_pars
+  cvsid='$Id$',
+  nt=10, it1=2, isave=100, itorder=3
+  random_gen='nr_f90', cdt=0.4
+  save_lastsnap=F
+  lpencil_check=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&forcing_run_pars
+  iforce='helical', force=0.07, relhel=1.
+/
+&magnetic_run_pars
+  eta=5e-1
+/
+&viscosity_run_pars
+  nu=5e-1
+/

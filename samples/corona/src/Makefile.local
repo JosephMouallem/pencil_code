@@ -1,0 +1,39 @@
+###                             -*-Makefile-*-
+### Makefile for modular pencil code -- local part
+### Included by `Makefile'
+###
+MPICOMM   =   mpicomm
+
+#================================
+# Please uncomment one IO option:
+#================================
+IO        =   io_hdf5
+HDF5_IO   =   hdf5_io_parallel
+#--------------------------------
+#IO        =   io_dist
+#--------------------------------
+#IO        =   io_collect
+#--------------------------------
+#IO        =   io_collect_xy
+#--------------------------------
+#IO        =   io_mpi2
+#================================
+
+#FILE_IO   =   file_io_f2003
+
+HYDRO     =   hydro
+DENSITY   =   density
+ENTROPY   =   temperature_idealgas
+MAGNETIC  =   magnetic
+RADIATION = noradiation
+
+GRAVITY   =   gravity_simple
+FORCING   = noforcing
+SHEAR     = noshear
+SHOCK	  =   shock
+
+SPECIAL   =   special/solar_corona
+
+FOURIER   =   fourier_fftpack
+
+REAL_PRECISION = double

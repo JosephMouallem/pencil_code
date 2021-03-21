@@ -1,0 +1,35 @@
+###                             -*-Makefile-*-
+### Makefile for modular pencil code -- local part
+### Included by `Makefile'
+###
+
+#================================
+# Please uncomment one IO option:
+#================================
+IO        = io_dist
+#--------------------------------
+#MPICOMM   =   mpicomm
+#IO        = io_hdf5
+#HDF5_IO   =   hdf5_io_parallel
+#================================
+
+HYDRO     =   hydro
+DENSITY   =   density
+ENTROPY   = noentropy
+MAGNETIC  = nomagnetic
+RADIATION = noradiation
+PSCALAR   = nopscalar
+
+GRAVITY   =   gravity_simple
+FORCING   = noforcing
+VISCOSITY =   viscosity
+SHEAR     =   shear
+
+DUSTDENSITY  =   dustdensity
+DUSTVELOCITY =   dustvelocity
+
+PARTICLES =   particles_tracers
+
+FOURIER   =   fourier_fftpack
+
+REAL_PRECISION = double

@@ -1,0 +1,22 @@
+!
+!  Initialisation parameters for dust particles moving in a random 
+!  velocity field.
+!
+&run_pars
+  nt = 100, it1 = 1
+  tmax = 10.0
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&shear_run_pars
+/
+&particles_run_pars
+/
+&particles_drag_run_pars
+    ldrag_on_par = .true.
+    ldrag_on_gas = .true.
+/

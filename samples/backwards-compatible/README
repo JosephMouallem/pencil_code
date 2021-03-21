@@ -1,0 +1,16 @@
+Directory:
+    ${PENCIL_HOME}/samples/backwards-compatible
+SVN Id:
+    $Id$
+Maintainer:
+    Axel Brandenburg <brandenb/nordita[dot]dk>
+Added:
+    03-Jun-2004
+Status:
+    is working
+Recommended resolution:
+    does not apply
+Comments:
+    Is used to make sure we notice when a new version of the code can
+    no longer restart from old snapshot. However, most of the problems
+    have to do with IDL and this is not tested.

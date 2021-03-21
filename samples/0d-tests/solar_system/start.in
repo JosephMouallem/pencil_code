@@ -1,0 +1,28 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$',
+  ip=10,                        ! debugging parameter
+  !xyz0  =  -32,-32,-0.26,      !Cartesian
+  !xyz1  =   32, 32, 0.26,      
+  xyz0  =   3,-3.14159,-0.26,    !Cylindrical
+  xyz1  =   4, 3.14159, 0.26,    
+  coord_system='cylindric'
+/
+&pointmasses_init_pars
+  initxxq='fixed-cm'
+  initvvq='fixed-cm'
+!  bcspx   ='out',bcspy='out',bcspz='out' !cartesian
+  bcqx   ='out',bcqy='p',bcqz='out'    !cylindrical
+  GNewton =1.0
+  pmass   =1.,2e-7,3e-6,3e-6,3e-7,1e-3,3e-4,4e-5,5e-5
+  r_smooth=0.,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+  iprimary=1
+!
+! test the "out" boundary condition
+! there is no particle inside the grid box!
+!
+  xq0=0.,0.38,0.72,1.0,1.5,5.2,10.,19.,30.
+/

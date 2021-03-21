@@ -1,0 +1,51 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Run parameters!
+!
+&run_pars
+  cvsid='$Id$',
+  ip=14,
+  nt=10, it1=50, it1d=100, isave=500, itorder=3, 
+  cdt=0.4, 
+  cdtv=0.4, 
+  dtmin=1e-6,
+  dsnap=6.28, dvid=1.0, d2davg=6.28 
+  slice_position='m'
+  wfreeze_ext = 0.05
+  fshift_int = 1
+  fshift_ext = -1
+/
+&eos_run_pars
+  rho0= 1. 
+/
+&hydro_run_pars
+  lfreeze_uext=T
+/
+&density_run_pars
+  lfreeze_lnrhoext=T
+  idiff='hyper3','shock'
+  diffrho_hyper3=5e-12
+  diffrho_shock=1.0
+/
+&grav_run_pars
+  ipotential='smoothed-newton' 
+  g0=1.,r0_pot=0.1,n_pot=2
+  lcylindrical_gravity=T
+/
+&magnetic_run_pars
+  B_ext=0.,0.,1e-3
+  iresistivity='hyper3','shock'
+  eta_hyper3=5e-12
+  lfreeze_aext=T
+  eta_shock=1.0
+/
+&viscosity_run_pars
+  ivisc='hyper3_rho_nu-const_symm','nu-shock'
+  nu_hyper3=5e-12,nu_shock=1.
+/
+&special_run_pars
+!  rt_int=0.4
+  B_ext=1e-3,llarge_scale_Bz=T
+/
+&shock_run_pars
+/

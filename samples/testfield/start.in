@@ -1,0 +1,10 @@
+!                                  -*-f90-*-
+! Initialisation parameters
+!
+&init_pars
+  cvsid='$Id$',
+/
+&hydro_init_pars
+/
+&testfield_init_pars
+/

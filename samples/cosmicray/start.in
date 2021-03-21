@@ -1,0 +1,18 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Initialisation parameters for disc run
+!
+&init_pars
+ip=14
+  cvsid='$Id$'
+/
+&eos_init_pars
+/
+&hydro_init_pars
+  inituu='soundwave-x', ampluu=1., kx_uu=1., widthuu=0.
+/
+&density_init_pars
+/
+&cosmicray_init_pars
+  initecr='const_ecr', ecr_const=1.
+/

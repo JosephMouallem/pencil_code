@@ -1,0 +1,54 @@
+!                     -*-f90-*-   (for emacs)
+! Initialisation parameters for corona
+!
+&init_pars
+  cvsid='$Id$'
+  xyz0 = 0., 0., 0.
+  Lxyz = 5., 5. , 4.
+!
+  unit_system  ='SI'
+  unit_length  =1e7
+  unit_velocity=1e4
+  unit_density =1e-8
+!
+  lperi = T,    T,   F,
+  grid_func  =  ,  , 'sinh'
+  coeff_grid =  ,  , 0.8
+  xyz_star   =  ,  , 0.6
+!
+  bcz      = 's:a', 's:a', 'a', 'set:a2', 'set:a2', 'pfe', 'nil', 'nil'
+  fbcz_bot =      ,      ,    ,         ,         ,  0.2 ,      ,
+  fbcz1    =      ,      ,    ,16.796295,0.78135928
+!
+  lseparate_persist = T
+  ldistribute_persist = F
+/
+&eos_init_pars
+  cs0   = 1.12      ! cs0 =  sqrt((gamma-1)T/c_p) = 11.2 km/s
+  rho0  =  30000.0  ! rho0*unit_density = 3e-4 kg/m^3
+  mu    = 0.667
+/
+&hydro_init_pars
+/
+&density_init_pars
+  rho_const=3e4
+  initlnrho='stratification'
+  strati_type='lnrho_lnTT'
+/
+&grav_init_pars
+  gravz_profile='const'
+  zref = 0
+  gravz=-27.4 ! gravz * unit_velocity^2 / unit_length = 274 m/s^2
+!  gravz_profile = 'solid_sphere'
+!  zref = 0.0            ! photosphereic level
+!  g_ref = -27.4         ! 274 m/s^2
+!  sphere_rad = 69.57    ! 695.7 Mm
+/
+&entropy_init_pars
+  initlnTT='nothing'
+/
+&magnetic_init_pars
+  initaa='magnetogram'
+/
+&special_init_pars
+/

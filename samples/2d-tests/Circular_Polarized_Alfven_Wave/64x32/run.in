@@ -1,0 +1,22 @@
+&run_pars
+  cvsid = '$Id$'
+  nt=10000, it1=1, dvid=.09, cdt=.65
+  tmax=4.5
+  tmax=9.
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&entropy_run_pars
+/
+&magnetic_run_pars
+  B_ext=0.44721360, 0.89442719, 0.
+  iresistivity = 'eta-const'
+  eta=0e-4
+/
+&viscosity_run_pars
+  nu=0e-4
+/

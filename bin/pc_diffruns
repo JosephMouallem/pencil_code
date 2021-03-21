@@ -1,0 +1,63 @@
+#!/bin/csh
+#
+#  Compare *.in and *.local files of two Pencil Code run directories.
+#
+#  Usage : pc_diffruns dir1 dir2
+#          pc_diffruns dir
+#
+#  Author: Anders Johansen
+#
+set narg=$#argv
+#
+#  If dir2 is missing, set to './'.
+#
+if ( $narg == 2 ) then
+  set dir1=$argv[1]
+  set dir2=$argv[2]
+else if ( $narg == 1 ) then
+  set dir1=$argv[1]
+  set dir2='.'
+else if ( $narg == 0 ) then
+  echo "Usage: pc_diffruns dir1 dir2"
+  echo "       pc_diffruns dir1"
+  exit
+endif
+#
+echo "Comparing Pencil Code run directories '$dir1' and '$dir2'"
+#
+#  Check if dir1 and dir2 are valid directories.
+#
+if ( ! -d $dir1 ) then
+  echo "ERROR - $dir1 is not a directory!"
+  exit
+endif
+#
+if ( ! -d $dir2 ) then
+  echo "ERROR - $dir2 is not a directory!"
+  exit
+endif
+#
+if ( $dir1 == $dir2 ) then
+  echo "ERROR - $dir1 and $dir2 is the same directory!"
+  exit
+endif
+#
+#  Loop through all possible *.in and *.local files.
+#
+foreach file ( start.in run.in print.in video.in xyaver.in xzaver.in yzaver.in zaver.in k.dat src/Makefile.local src/cparam.local)
+
+  if ( -e ${dir1}/${file} && -e ${dir2}/${file} ) then
+    echo "-- ${file}:  --"
+    diff -w ${dir1}/${file} ${dir2}/${file}
+  else
+    if ( -e ${dir1}/${file} && ! -e ${dir2}/${file} ) then
+      echo "-- ${file}:  --"
+      echo "exists in ${dir1}/, but not in ${dir2}"/
+    endif
+    if ( -e ${dir2}/${file} && ! -e ${dir1}/${file} ) then
+      echo "-- ${file}:  --"
+      echo "exists in ${dir2}/, but not in ${dir1}/"
+    endif
+  endif
+
+end

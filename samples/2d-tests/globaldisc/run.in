@@ -1,0 +1,58 @@
+!                           -*-f90-*-     (for Emacs)
+!
+!  Run parameters!
+!
+&run_pars
+  cvsid='$Id$',
+  ip=14,
+  nt=50, it1=5, isave=100, itorder=3, 
+  cdt=0.4, 
+  cdtv=0.4, 
+  dtmin=1e-6,
+  dsnap=6.283185, dvid=6.283185, d2davg=10. 
+  !ttransient=0.,
+  !tavg = 10.,                   ! time constant for time averaging
+  !random_gen='nr_f90',
+  !slice_position='e'
+  wfreeze_int = 0.
+  wfreeze_ext = 0.
+  wborder_int=0.05
+  wborder_ext=0.2
+  lbidiagonal_derij=F  !(use the slightly more accurate formulation for derij)
+!  lrtime_phiavg=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+  wdamp=0. 
+  lfreeze_uint=T,lfreeze_uext=T
+  borderuu='initial-condition'
+/
+&density_run_pars
+  lupw_rho=T ! use upwinding for rho to avoid wiggles
+             ! upwinding violates mass conservation!
+  lfreeze_lnrhoint=T
+  lfreeze_lnrhoext=T
+! diffrho_hyper3=5E-12, idiff='hyper3'
+  borderlnrho='initial-condition'
+/
+&viscosity_run_pars
+  ivisc='nu-const','nu-shock'
+  nu=1e-5,nu_shock=1.0
+  !ivisc='hyper3_rho_nu-const','nu-shock'
+  !nu_hyper3=5e-12,nu_shock=1.0
+/
+&special_run_pars
+/
+&shock_run_pars
+  lshock_first=T
+  lshock_max5=T
+/
+&particles_run_pars
+  ldragforce_dust_par=F
+  lcheck_exact_frontier=T
+/
+&pointmasses_run_pars
+  lnogravz_star=T
+  lfollow_particle=T,T
+/

@@ -1,0 +1,285 @@
+#!/bin/sh
+#  -*-Perl-*-
+#======================================================================#
+# Run the right perl version:
+if [ -x /usr/local/bin/perl ]; then
+  perl=/usr/local/bin/perl
+elif [ -x /usr/bin/perl ]; then
+  perl=/usr/bin/perl
+else
+  perl=`which perl| sed 's/.*aliased to *//'`
+fi
+
+exec $perl -x -S $0 "$@"     # -x: start from the following line
+#======================================================================#
+#! /Good_Path/perl -w
+# line 17
+
+# Name:   extract-diag-doc
+# Author: wd (Wolfgang.Dobler@ucalgary.de)
+# Date:   03-Oct-2006
+# Description:
+#   Extract documentation for diagnostic variables from lines of the form
+#     integer :: idiag_var=0  ! DIAG_DOC: <TeX documentation string>
+#                             ! DIAG_DOC: <possible continuation>
+#     integer :: idiag_var=0  ! DIAG_DOC: <TeX documentation string>
+#                             ! BCY_DOC: set boundary value
+#   in the modules in ${PENCIL_HOME}/src/ .
+#   Currently the doc tags DIAG, BCX, BCY, BCZ are supported.
+# Usage:
+#   extract-diag-doc ../src/toto*.f90  # (specific files)
+#   extract-diag-doc                   # (all F90 files)
+# Options:
+#   -h, --help      This help
+#   -v, --version   Print version number
+#   -V, --verbose   Be verbose
+
+# This program is free software; you can redistribute it and/or modify it
+# under the same conditions as Perl or under the GPL versions 2 or later.
+
+use strict;
+BEGIN {
+    # Make sure ${PENCIL_HOME}/lib/perl is in the Perl path
+    if (-d "$ENV{PENCIL_HOME}/lib/perl") {
+        unshift @INC, "$ENV{PENCIL_HOME}/lib/perl";
+    } else {
+        if ($0 =~ m!(.*[/\\])!) { unshift @INC, "$1../lib/perl"; }
+    }
+}
+
+# Try to load the relevant Perl modules and issue a helpful message if
+# this fails.
+eval 'use Pencil::Util';
+if ($@) {                       # Pencil::Util not found
+    die "You need to run\n  (cd \$PENCIL_HOME; cvs up -dA lib)\n$@\n";
+}
+Pencil::Util::use_pencil_perl_modules('Pencil::DocExtractor')
+  or die;
+
+use Getopt::Long;
+# Allow for `-Plp' as equivalent to `-P lp' etc:
+Getopt::Long::config("bundling");
+
+my (%opts);                     # Options hash for GetOptions
+my $doll='\$';                  # Need this to trick CVS
+
+## Process command line
+GetOptions(\%opts,
+           qw( -h    --help
+                     --debug
+               -o=s  --output=s
+               -V    --verbose
+               -v    --version ));
+
+my $debug = ($opts{'debug'} ? 1 : 0 ); # undocumented debug option
+if ($debug) {
+    printopts(\%opts);
+    print STDERR "\@ARGV = `@ARGV'\n";
+}
+
+if ($opts{'h'} || $opts{'help'})    { die usage();   }
+if ($opts{'v'} || $opts{'version'}) { die version(); }
+
+my $verbose = ($opts{'V'} || $opts{'verbose'}  || '' );
+my $file    = ($opts{'o'} || $opts{'output'}   || '-');
+
+## Construct file list
+my ($src_files_ref, $all_src) = get_src_files(@ARGV);
+
+my $diag_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*DIAG_DOC:/,
+    prefix  => qr/integer\s*::\s*idiag_([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $phiavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*PHIAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $xyavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*XYAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $xzavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*XZAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $yzavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*YZAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $yavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*YAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $zavg_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*ZAVG_DOC:/,
+    prefix  => qr/(?:integer\s*::\s*idiag_|For the manual:\s*)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $bc_doc   = Pencil::DocExtractor->new(
+    prefix  => qr/case\s*\(['"](.*)['"]\)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $mod_doc = Pencil::DocExtractor->new(
+    marker  => qr/!\s*MODULE_DOC:/,
+    prefix  => qr/(?:)([a-zA-Z0-9_]+)/,
+    verbose => $verbose,
+    debug   => $debug
+);
+
+my $bcx_doc = $bc_doc->new(marker  => qr/!\s*BCX_DOC:/);
+my $bcy_doc = $bc_doc->new(marker  => qr/!\s*BCY_DOC:/);
+my $bcz_doc = $bc_doc->new(marker  => qr/!\s*BCZ_DOC:/);
+
+foreach my $file (@$src_files_ref) {
+    $diag_doc->parse($file);
+    $phiavg_doc->parse($file);
+    $xyavg_doc->parse($file);
+    $xzavg_doc->parse($file);
+    $yzavg_doc->parse($file);
+    $yavg_doc->parse($file);
+    $zavg_doc->parse($file);
+    $bcx_doc->parse($file);
+    $bcy_doc->parse($file);
+    $bcz_doc->parse($file);
+    $mod_doc->parse($file);
+}
+
+$diag_doc->write_to_file({ file          => 'inlinedoc-diag.tex',
+                           sort_files    => 1,
+                           print_empty   => 0,
+                         });
+$phiavg_doc->write_to_file({ file          => 'inlinedoc-phiavg.tex',
+                             sort_files    => 1,
+                             print_empty   => 0,
+                           });
+$xyavg_doc->write_to_file({ file          => 'inlinedoc-xyavg.tex',
+                            sort_files    => 1,
+                            print_empty   => 0,
+                           });
+$xzavg_doc->write_to_file({ file          => 'inlinedoc-xzavg.tex',
+                            sort_files    => 1,
+                            print_empty   => 0,
+                           });
+$yzavg_doc->write_to_file({ file          => 'inlinedoc-yzavg.tex',
+                            sort_files    => 1,
+                            print_empty   => 0,
+                           });
+$yavg_doc->write_to_file({ file          => 'inlinedoc-yavg.tex',
+                            sort_files   => 1,
+                            print_empty  => 0,
+                           });
+$zavg_doc->write_to_file({ file          => 'inlinedoc-zavg.tex',
+                            sort_files   => 1,
+                            print_empty  => 0,
+                           });
+$bcx_doc->write_to_file({ file          => 'inlinedoc-bcx.tex',
+                          sort_files    => 1,
+                          print_empty   => 0,
+                          descr_width   => '0.8\textwidth',
+                        });
+$bcy_doc->write_to_file({ file          => 'inlinedoc-bcy.tex',
+                          sort_files    => 1,
+                          print_empty   => 0,
+                          descr_width   => '0.8\textwidth',
+                        });
+$bcz_doc->write_to_file({ file          => 'inlinedoc-bcz.tex',
+                          sort_files    => 1,
+                          print_empty   => 0,
+                          descr_width   => '0.8\textwidth',
+                        });
+
+$mod_doc->write_mod_to_file({ file       => 'inlinedoc-modules.tex',
+                            sort_files   => 1,
+                            print_empty  => 0,
+                           });
+# ---------------------------------------------------------------------- #
+sub get_src_files {
+# Construct list of .f90 source files
+    my @src_files = @_;
+    my $all_src = 0;
+
+    if (! @src_files) {         # no explicit source files given
+        # Process all src/*.f90 files
+        my $srcdir;
+        if (-d '../src') {
+            $srcdir = '../src';
+        } elsif (-d "$ENV{PENCIL_HOME}/src") {
+            $srcdir = "$ENV{PENCIL_HOME}/src";
+        } else {
+            die " Can't find suitable src/ dir\n";
+        }
+        print STDERR  "\$srcdir = <$srcdir>\n" if ($debug);
+
+        @src_files = <$srcdir/*.f90 $srcdir/*/*.f90>;
+         # Exclude files under src/obsolete/:
+        @src_files = grep !m{src/obsolete/}, @src_files;
+        # Sort alphabetically (but DocExtractor with sort_files => 1 will
+        # do its own sorting later):
+        @src_files = sort @src_files;
+        $all_src = 1;
+    }
+
+    return (\@src_files, $all_src);
+}
+# ---------------------------------------------------------------------- #
+sub printopts {
+# Print command line options
+    my $optsref = shift;
+    my %opts = %$optsref;
+    foreach my $opt (keys(%opts)) {
+        print STDERR "\$opts{$opt} = `$opts{$opt}'\n";
+    }
+}
+# ---------------------------------------------------------------------- #
+sub usage {
+# Extract description and usage information from this file's header.
+    my $thisfile = __FILE__;
+    local $/ = '';              # Read paragraphs
+    open(FILE, "<$thisfile") or die "Cannot open $thisfile\n";
+    while (<FILE>) {
+        # Paragraph _must_ contain `Description:' or `Usage:'
+        next unless /^\s*\#\s*(Description|Usage):/m;
+        # Drop `Author:', etc. (anything before `Description:' or `Usage:')
+        s/.*?\n(\s*\#\s*(Description|Usage):\s*\n.*)/$1/s;
+        # Don't print comment sign:
+        s/^\s*# ?//mg;
+        last;                        # ignore body
+    }
+    $_ or "<No usage information found>\n";
+}
+# ---------------------------------------------------------------------- #
+sub version {
+# Return CVS data and version info.
+    my $doll='\$';              # Need this to trick CVS
+    my $cmdname = (split('/', $0))[-1];
+    my $rev = '$Revision: 1.5 $';
+    my $date = '$Date: 2008-02-07 23:03:58 $';
+    $rev =~ s/${doll}Revision:\s*(\S+).*/$1/;
+    $date =~ s/${doll}Date:\s*(\S+).*/$1/;
+    "$cmdname version $rev ($date)\n";
+}
+# ---------------------------------------------------------------------- #
+
+# End of file [name]

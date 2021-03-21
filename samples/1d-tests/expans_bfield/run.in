@@ -1,0 +1,24 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+!  sample file for 1-D sound wave
+!
+&run_pars
+  cvsid='$Id$'
+  nt=5000, it1=10, cdt=0.4, cdtv=0.20, isave=50, itorder=3,
+  dsnap=20., dvid=1., tmax=100.
+  bcx = 's','s','s','s','s','s','a2','a2'
+  bcx = 's','s','s','s','s','a2','a2','a2'
+  lpencil_check=T
+/
+&hydro_run_pars
+  nu=0.07
+/
+&density_run_pars
+  cdiffrho=0.,  !(mass diffusion not currently used)
+/
+&entropy_run_pars
+  lcalc_heatcond_constchi=T,chi=0.07
+/
+&magnetic_run_pars
+  eta=0.07, B_ext=-.7,0.,0.
+/

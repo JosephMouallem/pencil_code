@@ -1,0 +1,61 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Initialisation parameters for interstellar
+!
+&init_pars
+  cvsid='$Id: start.in 9840 2008-09-05 07:29:37Z ajohan $'
+  unit_length=3.15570e21, unit_velocity=1.e5, unit_density=1.e-24
+  unit_temperature=1.e4, unit_magnetic=3.54491e-7
+  xyz0=-0.26,-0.26,-1.
+  xyz1=+0.26,+0.26,+1.
+  lperi=T,T,F
+  bcz='a2','a2','a2','a2','a2','a2','a2','a2','a2','a2'
+!  lshift_origin=T,T,T
+  lwrite_aux=T
+/
+&initial_condition_pars
+  ! for RBN cooling
+  !rho0ts=3.5
+  !T_init=15.8421
+  !for WSW cooling
+  rho0ts=2.75
+  T_init=20.259
+  lthermal_hse=T
+  !amplaa=0.01
+  !initaa='Ferriere-uniform-By'
+/
+!&global_init_pars
+!/
+&eos_init_pars
+!  mu=0.62
+/
+&hydro_init_pars
+  Omega=25.
+  inituu='nothing'
+/
+&density_init_pars
+  ldensity_nolog=T
+/
+&grav_init_pars
+  gravz_profile='Ferriere'
+/
+&entropy_init_pars
+!  cs0hs=0.090837799,H0hs=0.2
+/
+&magnetic_init_pars
+/
+!&cosmicray_init_pars
+!  initecr='const_ecr', ecr_const=1.
+!/
+&interstellar_init_pars
+!  initinterstellar='multiple'
+!  cooling_select='off'
+!  heating_select='off'
+!  lSNII=T
+!  lSNI=F
+  cooling_select='WSW'
+  heating_select='wolfire'
+/
+&shear_init_pars
+  qshear=1.0
+/ 

@@ -1,0 +1,18 @@
+Directory:
+    ${PENCIL_HOME}/samples/2d-tests/bubble
+SVN Id:
+    $Id$
+Maintainer:
+    Boris Dintrans <boris.dintrans/irap[dot]omp[dot]eu>
+Added:
+    05-Sep-2007
+Status:
+    succeeds # One of [succeeds|failing since <date>|obsolete| ...]
+Recommended resolution:
+    64x64 (nu=1e-3)
+Comments:
+    Oscillations of an entropy bubble embedded in an isothermal
+    atmosphere.
+Reference:
+    Dintrans & Brandenburg: "Identification of gravity waves in
+    hydrodynamical simulations", A&A, 421, 775-782 (2004).

@@ -1,0 +1,78 @@
+$Id$
+
+Much of the documentation in this file is no longer up-to-date.
+Most of th new commands start with pc_, so as to limit the name space
+in a unique way.
+
+In some case we keep the old and the new command. In the case of
+pc_auto-test (and auto-test) we keep both commands, because the
+former works with pc_auto-test, pc_build and pc_run, which not
+used by everybody. The nightly auto-tests work with auto-test, so
+as not to break the auto-test as further development with these
+commands proceeds.
+
+In October 2002 the files in this directory were
+
+   4 CVS/                4 cvsci_run*      8 mkdotin*      4 run.csh*       4 x*
+   4 README              4 getconf.csh     4 mkinpars*     4 setup-src*
+   4 adapt-mkfile*       8 gpgrowth*       4 new*          4 start.csh*
+   8 auto-test*          4 local*         12 nl2idl*       4 timestr*
+   4 cvs-add-rundir*     4 mkcparam*       4 own-risk*     4 tst.csh*
+
+setup-src (formerly lnsrc):
+       is to be called from the corresponding run directory to link
+       the source code into the src subdirectory. It also links
+       the getconf.csh, run.csh, and start.in files into the run
+       directory. When done, go into src and say "make".
+
+timestr: produces a time stamp; used by several scripts.
+
+tst.csh: runs start.csh and run.csh, and puts the results
+         directly into a TEST.* file, where the asterisk
+         denotes a time stamp.
+
+adapt-mkfile: used by Makefile
+
+new: produces a new run directory similar to another one.
+     Usage "new rings1 rings1b" for example, produces a new
+     run directory rings1b. You still need to compile the code
+     in the corresponding run directory.
+
+cvsci_run: used to check in a standard set of file that are frequently
+     used for post-processing purposes (including time_series.dat and index.pro)
+
+In the mean time there are many more files now. New files tend to
+be preceded by "pc_" to identify them as Pencil Code scripts.
+
+In April 2015 the files in this directory are more:
+
+auto-test              pc_configtest              pc_start
+build-testcase-cvs     pc_copyvar                 pc_svn_add_rundir
+copy-snapshots         pc_cvsup                   pc_svnstatus_ignlinks
+copy-snapshots_exp     pc_debug                   pc_svnup
+cvs-add-rundir         pc_deprecated_slice_links  pc_tsnap
+cvsci_run              pc_diffruns                pc_update_autotest.sh
+cvsci_run_bash         pc_dump_config             pc_update_validated.sh
+dx_get_datadir         pc_findconfig              pc_upgraderun
+dx_list_varfiles       pc_fix_svn_properties      pc_useutil
+dx_table2csv           pc_functions.sh            pc_videofiles
+dx_var.general         pc_get_param_state         pc_xmlexport
+getconf.csh            pc_grep                    pencil-test
+gpgrowth               pc_inspectrun              README
+mkdotin                pc_jobtransfer             read_videofiles.csh
+mkinpars               pc_llsub                   reaper
+mkproc-tree            pc_localize                reload
+mkwww                  pc_mkdatadir               remote-top
+move-slice             pc_mkproctree              restart-new-dir
+nl2idl                 pc_newrun                  restart-new-dir-VAR
+nl2python              pc_news                    run.csh
+pc_about               pc_nowarn_to_kcq           scpdatadir
+pc_autocorrect_config  pc_pencil_swap             scp-proc-to-proc
+pc_auto-test           pc_phonelist               setup-src
+pc_build               pc_qsub                    start.csh
+pc_check_dir           pc_reduce_all              start_run.csh
+pc_check_revision      pc_rename                  summarize-history
+pc_codingstyle         pc_run                     timestr
+pc_collect_all         pc_script_test
+pc_config.sh           pc_setupsrc
+

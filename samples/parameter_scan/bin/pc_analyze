@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+#  $Id$
+#
+#  Script to analyze data in run directory.
+#
+#----------------------------------------------------------
+#  name of the new run directory
+#
+newrun=$1
+cd $newrun
+#
+idl <<EOF
+.r write_summary
+EOF

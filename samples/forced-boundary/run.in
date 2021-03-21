@@ -1,0 +1,28 @@
+!                     -*-f90-*-   (for emacs)
+!  run parameters for boundary forcing of magnetic arc
+!
+&run_pars
+  ip=14
+  cvsid='$Id$'
+  nt=100, it1=10, isave=100
+  cdt=0.4, cdtv=0.4, itorder=3,
+  dsnap=1., dvid=0.5,
+  bcx = 'p'   ,'p'   ,'p'  ,'p' ,'p'   ,'p'   ,'p'
+  bcy = 'p'   ,'p'   ,'p'  ,'p' ,'p'   ,'p'   ,'p'
+! bcz = 'g:s' ,'g:s' ,'g:a','a2','fB:s','fB:s','s:a'
+  bcz = 'g:s' ,'g:s' ,'g:a','a2','a2:s','a2:s','s:a'
+  force_lower_bound='uxy_sin-cos'
+  lpencil_check=T
+  /
+&eos_run_pars             
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&magnetic_run_pars
+  eta=1.5e-2,
+/
+&viscosity_run_pars
+  nu=1.5e-2,
+/

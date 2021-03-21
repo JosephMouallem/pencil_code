@@ -1,0 +1,26 @@
+!                                  -*-f90-*-
+! Run-time parameters
+!
+&run_pars
+  cvsid = '$Id$'
+  nt = 51, it1 = 10
+  tmax = 10.1, dsnap = 10.0
+  cdt = 0.4
+  lpencil_check = .true.
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&magnetic_run_pars
+  B_ext = 1., 1., 0.5
+  limplicit_resistivity = .true.
+  eta = 0.1
+/
+&viscosity_run_pars
+  limplicit_viscosity = .true.
+  ivisc = 'simplified', nu = 0.1
+/
+&implicit_diffusion_run_pars
+  implicit_method = 'fft'
+/

@@ -1,0 +1,24 @@
+!  -*-f90-*-  (for Emacs)    vim:set filetype=fortran:  (for vim)
+!
+! Runtime parameters for the anelastic approximation
+!
+&run_pars
+  cvsid='$Id$',
+  nt=201, it1=5, itorder=3
+  dsnap=20.0, dvid=0.2
+  lpencil_check=F
+  lread_aux=T
+/
+&eos_run_pars
+/
+&hydro_run_pars
+/
+&density_run_pars
+/
+&poisson_run_pars
+/
+&entropy_run_pars
+/
+&viscosity_run_pars
+  nu=1e-3
+/

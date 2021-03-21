@@ -1,0 +1,18 @@
+Directory:
+    ${PENCIL_HOME}/samples/chiral-diffusion
+SVN Id:
+    $Id$
+Maintainer:
+    Axel Brandenburg <brandenb/nordita[dot]dk>
+Added:
+    27-Jun-2005
+Status:
+    has been working since summer 2004
+Recommended resolution:
+    works at any resolution provided chiral_diff is chosen suitably.
+Comments:
+    Has been used to model the spatial evolution of replicating molecules
+    of opposite chirality in 1, 2, or 3 dimensions.
+References:
+    Brandenburg, A., & Multamäki, T.: 2004, ``How long can left and
+    right handed life forms coexist?'' Int. J. Astrobiol. 3, 209-219

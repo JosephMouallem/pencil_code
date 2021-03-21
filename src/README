@@ -1,0 +1,154 @@
+$Id$
+
+1. You are not supposed to compile in this src directory.
+
+2. You should always compile from the run directory
+   (e.g. created via pc_newrun by cloning an earlier run).
+   This src directory appears then as a link in you run directory.
+   The pc_setupsrc produces a file Makefile in your run directory.
+
+3. The file src/Makefile.local indicates which files are actually used.
+   In fact, only a small fraction is used each time.
+
+4. Example: the equation-of-state module. You would only used one
+   out of several possibilities:
+
+     eos_idealgas.f90
+     eos_chemistry.f90
+     eos_ionization.f90
+     eos_fixed_ionization.f90
+     eos_temperature_ionization.f90
+
+   For runs without an equation of state (e.g. isothermal runs) you would use:
+
+     noeos.f90
+
+5. Some confusion may occur because not all modules are equally
+   frequently used, and some are more outdated and/or not recommended.
+   The following gives a brief status description.
+   Experimental files are supposed to be in the experimental directory.
+   Obsolete files that may still be useful for inspection are in obsolete.
+   Modules that still work, but are not used, are in inactive.
+   On the other hand, the special directory should only contain modules
+   that connect to the "special" interface. Examples include advective_gauge
+   and gross_pitaevskii. Even some 0D modules such as oscillation_0D_Lorenz
+   for solving the Lorenz attractor equations can be found for test purposes.
+
+Brief status description about some modules
+===========================================
+
+The bfield module
+-----------------
+
+This module has been developed by Chao-Chin Yang <ccyang@astro.lu.se>
+between June 2013 and July 2014. However, for all usual applications we
+continue to use magnetic.f90, which uses the magnetic vector potential.
+
+The EOS module
+--------------
+
+6-sep-09: For standard applications "eos_idealgas" is used routinely.
+"eos_chemistry" is only used in conjunction with the chemistry module,
+but chemistry.f90 can also be used with eos_idealgas.f90.
+"eos_ionization" calculates the degree of ionization from the Saha equation,
+"eos_fixed_ionization" is similar, but uses a fixed degree of ionization.
+With ionization, it is advantageous to use eos_temperature_ionization.f90
+together with temperature_ionization.f90.
+
+The testfield module
+--------------------
+
+None of these modules have to run with magnetic field, but they can
+if one wants the velocity field to be affected by the magnetic field.
+
+     testfield_z.f90
+
+       6-sep-09: is used routinely. Assumes z-dependent mean magnetic fields.
+    
+     testfield.f90
+
+       6-sep-09: is not currently used, but functional and would need to be
+       checked and updated. It is used for testfields that depend on
+       x and z, so averaging over y is assumed.
+
+     testfield_x.f90
+
+       6-sep-09: is functional, but not at the same level of advancement
+       as testfield_z. It is used for x-dependent mean fields,
+       i.e. averaging over y and z is assumed.
+       9-may-10: seems now to produce wrong results. Is not part of auto-test.
+       17-may-10: seems now to produce *correct* results. Not sure what's up.
+
+     testfield_xz.f90
+
+       6-sep-09: status is currently unclear. It may be redundant.
+      17-jun-13: is now working with sample (but not yet in auto-test)
+
+     testfield_axisym.f90
+
+       Uses 3 test fields and assumes test turbulence to have one
+       preferred direction, so it is assumed to be axisymmetric.
+       9-may-10: this routine works well for periodic test fields.
+       For periodic test fields it is better to use testfield_axisym2.
+       17-jul-10: works also  for linear test field. Currently only
+       the z-dependent output is correct, not the command-line output.
+
+     testfield_axisym2.f90
+
+       Uses 2 test fields and assumes test turbulence to have one
+       preferred direction, so it is assumed to be axisymmetric.
+       9-may-10: this routine works well for periodic test fields.
+       Linear test fields have not been tested yet.
+       This routine is cheaper to run than testfield_axisym and
+       has been used in recent applications with Koen and Karl-Heinz.
+
+     testfield_nonlin_z.f90
+
+       This routine has been used in the 2010 paper with Rheinhardt.
+       On 17-jul-10, minor problems with subtracting uumz have been corrected.
+
+     testfield_compress_z.f90
+
+       Is not ready yet. It is supposed to extend testfield_nonlin_z
+       into the case where u.gradu and gradh are included in the
+       momentum equation.
+
+The anelastic module
+--------------------
+
+The former anelastic branch is now inactive and all changes have been
+merged into the main trunk.
+
+     density_anelastic.f90
+
+       26-dec-09: several aspects of this module are now working,
+       but it is still experimental and should not be used for
+       production runs.
+
+The coagulation module
+----------------------
+
+This module is not usually used for production runs. 2 of 3 samples in 0D
+work, but one requires the small pencil check to be turned off. The latest
+study was by Li et al. (arXiv:1604.08169).
+
+Upwinding
+---------
+
+Upwinding is routinely used in all equidistant grids (Cartesian, spherical,
+and probably cylindrical) and is working fine for all variables.
+On nonequidistant grids, upwinding is not implemented.
+
+Nonequidistant grids
+--------------------
+
+There are issues with the boundary conditions when using nonequidistant
+grids. This is because in coordinate space a symmetry condition is no
+longer meaningful.
+
+Non-Cartesian grids
+-------------------
+
+In spherical coordinates, there are open questions about the decay rate
+when using perfect conductor boundary conditions.
+

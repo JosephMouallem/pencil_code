@@ -1,0 +1,264 @@
+#!/bin/csh
+#
+#  $Id$
+#
+#  This script generates a link to a data directory
+#  with the same name as the current working directory
+#  but that is located on a data disk. The name of the
+#  desired data disk will be different and different
+#  machine, so you may need to add your particular
+#  machine name below
+#
+#  Note: to make user specific directory options, follow
+#  an example by searching for "$USER".
+#
+echo $cwd >! .tmp
+#
+#  in the following if block one can add more machines
+#  where workspace can be allocated.
+#
+set hn = `hostname`
+echo 'We are on the machine "'$hn'", so the new workspace will be'
+#
+if ($hn =~ mhd*.st-and.ac.uk) then
+  set str='s/home/work2/g'
+else if ($hn =~ fend*.dcsc.ku.dk) then
+  set str='s/astro/gpfs1\/astro/g'
+else if (($hn =~ emil*) && ($USER =~ brandenb)) then
+  echo "special entry for Axel on Lindgren2"
+  #set str='s/emil\/pdc/nobackup\/b/g'
+  set str='s/emil\/pdc/klemming\/nobackup\/b/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ brandenb)) then
+  echo "special entry for Axel"
+  #set str='s/afs\/pdc.kth.se\/home\/b/scratch/g'
+  set str='s/home\/b\/brandenb/misc\/tmp\/projects\/prj.2007-08.brandenb.4/g'
+  #set str='s/home\/b\/brandenb/misc\/pdc\/volumes\/pdc\/prj.pdc.brandenb.10/g'
+  #set str='s/home\/b\/brandenb/misc\/pdc\/volumes\/pdc\/prj.pdc.brandenb.11/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ emeric)) then
+  echo "special entry for Emeric"
+  set str='s/home\/e\/emeric/misc\/tmp\/volumes\/pdc\/prj.pdc.brandenb.10\/emeric/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ fabiods)) then
+  echo "special entry for Fabio"
+  set str='s/home\/f\/fabiods/misc\/pdc\/volumes\/pdc\/prj.pdc.brandenb.10\/fabiods/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ piyali)) then
+  echo "special entry for Piyali"
+  set str='s/home\/p\/piyali/misc\/tmp\/volumes\/pdc\/prj.pdc.brandenb.11\/piyali/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ gustavog)) then
+  echo "special entry for Gustavo"
+  set str='s/home\/g\/gustavog/misc\/tmp\/volumes\/pdc\/prj.pdc.brandenb.11\/gustavog/g'
+else if (($hn =~ a07c01n08*) && ($USER =~ violaine)) then
+  echo "special entry for Violaine"
+  set str='s/home\/v\/violaine/misc\/tmp\/projects\/prj.2007-08.brandenb.9\/violaine/g'
+else if (($hn =~ *norlx01*) && ($USER =~ brandenb)) then
+  echo "special entry for Axel"
+  set str='s/afs\/physto.se\/home\/b/scratch/g'
+else if (($hn =~ fe*) && ($USER =~ brandenb)) then
+  echo "special entry for Axel"
+  set str='s/people\/disk2/wkspace3/g'
+else if ($hn =~ fe*) then
+  set str='s/people\/disk2/wkspace3/g'
+else if (($hn =~ node1309) && ($USER =~ csc01114)) then
+  set str=''
+else if ($hn =~ node[0-9]*) then
+  set str='s/clx\/userhpe\/'$USER'/scratch\/'$USER'\/DATA/g'
+else if ($hn =~ sp[0-9]*) then
+  set str='s/sp4\/userhpe/scratch\/DATA/g'
+else if ($hn =~ triolith*) then
+  #set str='s/home/nobackup\/global/g'
+  set str='s/home/proj\/snic2013-26-32\/users/g'
+else if ($hn =~ ns0*) then
+  set str='s/home/data/g'
+else if ($hn =~ ns1*) then
+  set str='s/home/data/g'
+else if ($hn =~ sander*) then
+  set str='s/astro/scratch1\/astro/g'
+else if ($hn =~ nq*.nordita.dk) then
+  #set str='s/home/nq1\/data/g'
+  set str='s/home/data/g'
+else if ($hn =~ nl0) then
+  set str='s/home\/mattias\/pencil-code\/runs/var\/tmp/g'
+else if ($hn =~ nl3) then
+  set str='s/home/scr/g'
+else if ($hn =~ ds0*) then
+  echo "for Axel on DataStar"
+  set str='s/rmount\/users02\/ucsd/gpfs-wan\/scratch/g'
+#else if (($hn =~ nl6)) then
+  #set str='s/home/D/g'
+  #set str='s/home/wkspace\/data/g'
+  #set str='s/wkspace/wkspace\/data/g'
+  #set str='s/brandenb/brandenb\/storage/g'
+#else if (($hn =~ *.rc.colorado.edu)) then
+  #set str='s/home/rc_scratch/g'
+#else if (($hn =~ login0* && $USER =~ axbr9098)) then
+##else if (($hn =~ login0*)) then
+##  set str='s/home/lustre\/janus_scratch/g'
+else if (($hn =~ ekhi.colorado.edu)) then
+  set str='s/home1/export\/ekhi/g'
+else if (($hn =~ lcd.colorado.edu)) then
+  set str='s/home1/scratch/g'
+else if (($hn =~ charybdis.colorado.edu)) then
+  #set str='s/home6/charybdis/g'
+  set str='s/home1/charybdis/g'
+else if (($hn =~ scylla.colorado.edu) && ($USER =~ axbr9098)) then
+  set str='s/home1/scylla/g'
+else if (($hn =~ scylla.colorado.edu) && ($USER =~ lcdworkshop)) then
+  set str='s/home6/scylla/g'
+else if (($hn =~ nl11) || ($hn =~ wormhole)) then
+  set str='s/home/home\/data/g'
+else if ($hn =~ tac*) then
+  set str='s/usr\/tac/scratch/g'
+else if ($hn =~ embla) then
+  set str='s/home\/u./work/g'
+else if (($hn =~ giga*) && ($USER =~ n7026413)) then
+  set str='s/home/addon\/space/g'
+else if ($hn =~ giga*) then
+  set str='s/home/work/g'
+else if (($hn =~ gridur) && ($USER =~ nilshau))then
+  echo "special entry for Nils Erland"
+  echo $cwd/data >! .tmp
+  set str='s/home\/u./mnt\/mldwork2\/work2/g'
+else if ($hn =~ gridur) then
+  set str='s/home\/u./work/g'
+else if ($hn =~ nw17) then
+  set str='s/home/var\/tmp/g'
+else if ($hn =~ p690*) then
+  set str="s@\(/gpfs_wrk/[a-zA-Z0-9]*\)@\1/data@g"
+else if ($hn =~ sepeli*) then
+  set str="s@$WRKDIR@$WRKDIR/data@g"
+else if ($hn =~ nw*) then
+  set str='s/home/data/g'
+else if ($hn =~ fire) then
+  echo $cwd/data >! .tmp
+  set str='s/home\/parallab\/ntnu/work/g'
+else if ($hn =~ *stampede*) then #stampede.tacc.utexas.edu
+  if ($USER =~ ccyang) then
+    echo "Special entry for Chao-Chin Yang"
+    set str='s/work\/01074\/ccyang\/stampede2/scratch\/01074\/ccyang/g'
+  else
+    set str='s/home1/scratch/g'
+  endif
+else if ($hn =~ login*) then
+  echo $cwd/data >! .tmp
+  set str='s/home/disk\/global/g'
+else if ($hn =~ *.phys.ntnu.no) then
+  set str='s/home\/gudrun/work\/erland/g'
+else if (($hn =~ copson*) && ($USER =~ mee)) then
+  set str='s/raid3\/mee/home\/mee\/WORK_DIRECTORY\/data/g'
+else if (($hn =~ copson*) && ($USER =~ asnod)) then
+  set str='s/$/\/data/g'
+else if (($hn =~ copson*) && ($USER =~ n9405169)) then
+  set str='s/$/\/data/g'
+else if ($hn =~ linux*) then
+  set str='s/users\/physik\/physik/scratch/g'
+else if (($hn =~ obelix*) && ($USER =~ svart)) then
+  echo "special entry for Mike"
+  set str='s/home/b/g'
+else if ($hn =~ obelix*) then
+  set str='s/home/export\/obelix1/g'
+else if ($hn =~ psi24*) then
+  set str='s/afs\/ipp-garching\.mpg\.de\/home\/a/u/g'
+else if (($hn =~ rio* || $hn =~ pia*) && ($USER =~ ajohan)) then
+  if ( `pwd` =~ \/afs\/* ) set str='s/afs\/ipp\/home\/[a-z]/nfs\/mpia2/g'
+  if ( `pwd` =~ \/nfs\/* ) then
+    echo "We are on /nfs at pia, so datadir is simply data/"
+    mkdir data
+    exit
+  endif
+else if (($hn =~ rio* || $hn =~ pia*) && ($USER =~ wlyra)) then
+  set str='s/code/data/g'
+else if ($hn =~ theo*) then 
+  set str='s/afs\/ipp\/home\/[a-z]/ptmp\/mpia/g'  
+else if ($hn =~ genius*) then
+  set str='s/u\/ajohan\/BlueGene/ptmp\/ajohan/g'
+else if ($hn =~ *.uppmax.uu.se) then
+  set str='s/home/glob/g'
+else if ($hn =~ triton) then
+  set str='s/home/var\/tmp/g'
+else if ($hn =~ gwdu102) then
+  set str='s/\/usr\/users/\/home\/temp1/g'
+else if (($hn =~ helios*) && ($USER =~ warnecke))then
+#  set str='s/home\/warnecke\/pencil-code/scratch\/warnecke\/pcdata/g'
+  set str='s/home\/warnecke\/pcruns/scratch\/warnecke\/pcdata/g'
+else if (($hn =~ helios*) && ($USER =~ viviani))then
+#  set str='s/home\/warnecke\/pencil-code/scratch\/warnecke\/pcdata/g'
+  set str='s/home\/viviani\/pcrun/scratch\/viviani\/pcdata/g'
+else if ($hn =~ lfc*) then
+  set str='s/\/home/\/nfs\/d12/g'
+else if ($hn =~ easymac) then
+  set str='s/Users/var\/tmp/g'
+else if ($hn =~ bob || $hn =~ doug || $hn =~ eh*) then
+  set str='s/home/mnt\/raid\/hoser1/g'
+else if ($hn =~ tpb* ) then
+  set str='s/home/\/cita\/d\/scratch-3month/g'
+else if ($hn =~ nunatak* ) then
+  set str='s/\/global\/home/\/global\/scratch/g'
+else if ($hn =~ aida25 ) then
+  set str='s/home/var\/tmp/g'
+else if ($hn =~ p6012 ) then # huygens.sara.nl
+  set str='s/home/scratch\/shared/g'
+else if ($hn =~ andromeda ) then # andromeda.qmul.ac.uk
+  echo $hn
+  set str='s/users/andromeda\/scratch/g'
+else if ($hn =~ taurus ) then # taurus.qmul.ac.uk
+  echo $hn
+  set str='s/home/share\/scratch/g'
+else if ($hn =~ mhdc ) then # ukmhd cluster 
+  echo $hn
+  set str='s/home/workspace/g'
+else if ($hn =~ starpc37.maths.qmul.ac.uk ) then # starpc37.qmul.ac.uk
+  set str='s/home\/network/scratch/g'
+else if ($hn =~ kraken*) then # NICS Kraken cluster
+  echo $hn
+  set letter = `echo ~ | xargs dirname | xargs dirname | xargs basename`
+  set str='s/nics\/'"$letter"'\/home/lustre\/scratch/g'
+else if ($hn =~ zodiac*) then
+  set str='s/home/nobackup0\/protostellar_disks/g'
+else if ( ($hn =~ platon.int) && ($USER =~ ajohan) ) then # platon.lunarc.lu.se
+  set str='s/home/platon\/projects\/astro\/nobackup/g'
+else if ( ($hn =~ alarik.int) && ($USER =~ ajohan) ) then # alarik.lunarc.lu.se
+  set str='s/home/alarik\/projects\/astro\/nobackup/g'
+else if ( ($hn =~ stokes*) && ($USER =~ pr1s0037) ) then # Stokes machine
+  set str='s/\/ichec\/home\/users\/pr1s0037/\/ichec\/work\/PLANETESIM/g'
+else if ( ($hn =~ gardar*) ) then
+  set str='s/home/scratch/g'
+else if ($hn =~ darwin*) then
+  set str='s/Users/var\/tmp/g'
+else if (($hn =~ hydra*) && ($USER =~ joernw))then # joern on hydra
+  set str='s/u\//ptmp\//g'
+else if (($hn =~ cobra*) && ($USER =~ joernw))then # joern on cobra
+  set str='s/u\//ptmp\//g'
+else if (($hn =~ gwdu*) && ($USER =~ jwarnec))then # joern on gwdg
+  set str='s/usr\/users\/jwarnec\/pencil-code/scratch\/jwarnec\/pencil-data/g'
+else
+#
+#  Set the default to empty string (to make local data directory; see below).
+#
+  set str=''
+endif
+#
+if ("$str" == '') then
+#
+#  By default, make a local directory in the run directory.
+#
+  echo "... in the current run directory"
+  mkdir data
+else
+#
+#  Make and link to scratch disk.
+#
+  sed -e "$str" .tmp >! .scr
+  if ( -d data ) then
+    echo Moving present data directory to: `cat .scr`
+    mkdir -p `cat .scr`
+    rm -rf `cat .scr`
+    mv data `cat .scr`
+  else
+    echo Creating: `cat .scr`
+    mkdir -p `cat .scr`
+  endif
+  ln -s `cat .scr` data
+endif
+#
+#  Delete temporary files.
+#
+\rm -f .scr .tmp
