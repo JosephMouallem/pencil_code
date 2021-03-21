@@ -184,7 +184,8 @@ module Particles
   real :: A3=0., A2=0.
   real, target :: G_condensation=0.0
   logical :: ascalar_ngp=.false., ascalar_cic=.false.
-!
+
+  real :: R_RING=0., Sigma_RING=0.
   namelist /particles_init_pars/ &
       initxxp, initvvp, xp0, yp0, zp0, vpx0, vpy0, vpz0, delta_vp0, &
       ldragforce_gas_par, ldragforce_dust_par, bcpx, bcpy, bcpz, tausp, &
@@ -234,7 +235,7 @@ module Particles
       remove_particle_at_time, remove_particle_criteria, &
       remove_particle_criteria_size, remove_particle_criteria_edtog, &
       lnocollapse_xdir_onecell, lnocollapse_ydir_onecell, &
-      lnocollapse_zdir_onecell, qgaussz, r0gaussz
+      lnocollapse_zdir_onecell, qgaussz, r0gaussz, R_RING, Sigma_RING
 !
   namelist /particles_run_pars/ &
       bcpx, bcpy, bcpz, tausp, dsnap_par_minor, beta_dPdr_dust, &
@@ -993,6 +994,14 @@ module Particles
       integer :: npar_loc_x, npar_loc_y, npar_loc_z
       integer :: l, j, k, ix0, iy0, iz0
       logical :: lequidistant=.false.
+
+
+!real::R_RING
+!real::Sigma_RING
+real::X_RING_C1
+real::Y_RING_C1
+real::X_RING_C2
+real::Y_RING_C2
 !
 !  Optionally withhold some number of particles, to be inserted in
 !  insert_particles. The particle indices to be removed are not randomized,
@@ -1276,7 +1285,35 @@ module Particles
               endif
             enddo
           enddo
-!
+!#######################################################################
+
+        case('Vort-ring')
+
+
+        !R_RING=2*pi/8                 !namelist
+        !Sigma_RING=R_RING/5           !namelist
+        X_RING_C1=R_RING+Sigma_RING
+        Y_RING_C1=0
+        X_RING_C2=-(R_RING+Sigma_RING)
+        Y_RING_C2=0
+
+
+        do k=1,npar_loc
+          call random_number_wrapper(r)
+
+          fp(k,izp) = -pi
+          fp(k,iyp) = (2*r-1)*R_RING
+          fp(k,ixp) = X_RING_C1-dsqrt(R_RING**2-(fp(k,iyp)-Y_RING_C1)**2)
+        enddo
+
+
+!#######################################################################
+
+
+
+
+
+
         case ('random-box')
           if (lroot) print*, 'init_particles: Random particle positions '// &
               'within a box'
