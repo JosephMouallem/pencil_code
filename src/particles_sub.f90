@@ -311,6 +311,19 @@ module Particles_sub
                 endif
               endif
             endif
+
+          elseif (bcpx=='freeze') then
+
+!  freeze particle boundary condition
+
+            if (fp(k,ixp)<=xyz0(1)) then
+              fp(k,ixp)=fp(k,ixp)
+              fp(k,ivpx)=0
+            elseif (fp(k,ixp)>=xyz1(1)) then
+              fp(k,ixp)=fp(k,ixp)
+              fp(k,ivpx)=0
+            endif
+
           elseif (bcpx=='hw') then
 !
 !  Hard wall boundary condition
@@ -397,6 +410,19 @@ module Particles_sub
               endif
             endif
 !
+           
+          elseif (bcpy=='freeze') then
+
+!  freeze particle boundary condition
+
+            if (fp(k,iyp)<=xyz0(2)) then
+              fp(k,iyp)=fp(k,iyp)
+              fp(k,ivpy)=0
+            elseif (fp(k,iyp)>=xyz1(2)) then
+              fp(k,iyp)=fp(k,iyp)
+              fp(k,ivpy)=0
+            endif
+
           elseif (bcpy=='hw') then
 !
 !  Hard wall boundary condition
@@ -463,6 +489,20 @@ module Particles_sub
                 fp(k,izp)=2*xyz1(3)-fp(k,izp)
               endif
             endif
+
+
+          elseif (bcpz=='freeze') then
+
+!  freeze particle boundary condition
+
+            if (fp(k,izp)<=xyz0(3)) then
+              fp(k,izp)=fp(k,izp)
+              fp(k,ivpz)=0
+            elseif (fp(k,izp)>=xyz1(3)) then
+              fp(k,izp)=fp(k,izp)
+              fp(k,ivpz)=0
+            endif
+
           elseif (bcpz=='hw') then
 !
 !  Hard wall boundary condition
